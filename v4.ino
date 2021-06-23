@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include <doxygen.h>
 #include <NexButton.h>
 #include <NexCheckbox.h>
@@ -26,9 +28,24 @@
 #include <NexWaveform.h>
 
 
-#include <Nextion.h> 
+#include <Nextion.h>
+
 #define dirPin 12
 #define stepPin 13
+
+#define TIME_MAX (3599)
+
+#define PRESET_TOTAL_TIME       (10 * 60) // 10 minutes = 600 seconds
+#define PRESET_FIRST_CYCLE_TIME (30)      // 30 seconds
+#define PRESET_PAUSE_TIME       (50)      // 50 seconds
+#define PRESET_REP_CYCLE_TIME   (10)      // 10 seconds
+
+int total_time_         = PRESET_TOTAL_TIME;
+int first_cycle_time_   = PRESET_FIRST_CYCLE_TIME;
+int pause_time_         = PRESET_PAUSE_TIME;
+int rep_cycle_time_     = PRESET_REP_CYCLE_TIME;
+int current_cycle_time_ = 0;
+
 int max_speed=3;//delay(1ms faster speed)
 int min_speed=15;//delay(500ms slower speed)
 
@@ -39,28 +56,10 @@ bool A_Reset = false;
 bool A_Left = false;
 bool A_Right = false;
 
-//preset value
-unsigned int A_ST_m = 10;
-unsigned int A_ST_s = 0;
 unsigned int  A_ST = 0;
-
-unsigned int A_CT_m = 0;
-unsigned int A_CT_s = 0;
 unsigned int  A_CT = 0;
-
-//preset value
-unsigned int A_F_cycle_m = 0;
-unsigned int A_F_cycle_s = 30;
 unsigned int A_F_cycle = 0;
-
-//preset value
-unsigned int A_P_m = 0;
-unsigned int A_P_s = 50;
 unsigned int A_P = 0;
-
-//preset value
-unsigned int A_R_m =0 ;
-unsigned int A_R_s = 10;
 unsigned int A_R = 0;
 
 //preset value
@@ -71,7 +70,7 @@ unsigned int A_AR = 80;
 int A_Speed = 85;
 
 int increment=1;
-int time_click=5;//wait 5ms 
+int time_click=5;//wait 5ms
 int i=0;
 int pos=0;
 unsigned int Step_F=0;
@@ -132,7 +131,7 @@ bool dw6=false;
 bool dw7=false;
 
 
-NexTouch *nex_listen_list[] = 
+NexTouch *nex_listen_list[] =
 {
   &Start,  // Button added
   &Stop,  // Button added
@@ -189,7 +188,7 @@ void LeftPushCallback(void *ptr)  // Press event for button Left
 {
   A_Left = true;
   A_Right = false;
-} 
+}
 void LeftPopCallback(void *ptr)  // Press event for button UP
 {
   A_Left = false;
@@ -210,32 +209,20 @@ void RightPopCallback(void *ptr)  // Press event for button UP
 //---------Total time-------------------------------------------------
 void UP1PushCallback(void *ptr)  // Press event for button UP1
 {
-  A_ST_s = A_ST_s + increment;
-  if(A_ST_s>=60){
-    A_ST_s=0;
-    A_ST_m=A_ST_m+1;
-  }
+  total_time_ = min(total_time_ + increment, TIME_MAX);
   delay(time_click);
   i=0;
   up1=true;
-}  // End of press event
+}
 
 void UP1PopCallback(void *ptr)  // Press event for button UP
 {
   up1=false;
 }
 
-
 void DW1PushCallback(void *ptr)  // Press event for button DW1
 {
-  A_ST_s = A_ST_s - increment;
-      if(A_ST_s<=-1){
-    A_ST_s=59;
-    A_ST_m=A_ST_m-1;
-    if(A_ST_m<=-1){
-    A_ST_m=0;
-    A_ST_s=0;}
-  }
+  total_time_ = max(total_time_ - increment, 0);
   delay(time_click);
   i=0;
   dw1=true;
@@ -243,117 +230,90 @@ void DW1PushCallback(void *ptr)  // Press event for button DW1
 void DW1PopCallback(void *ptr)  // Press event for button DW
 {
   dw1=false;
-}// End of press event
+}
 
-
-
-//---------Firest cycle-------------------------------------------------
+//---------First cycle-------------------------------------------------
 void UP2PushCallback(void *ptr)  // Press event for button UP2
 {
-  A_F_cycle_s = A_F_cycle_s + increment;
-
-      if(A_F_cycle_s>=60){
-    A_F_cycle_s=0;
-    A_F_cycle_m++;
-  }
+  // TODO: check if total time became more that TIME_MAX
+  first_cycle_time_ = min(first_cycle_time_ + increment,  TIME_MAX);
   delay(time_click);
   i=0;
   up2=true;
-}  // End of press event
-void UP2PopCallback(void *ptr)  // Press event for button UP
+}
+
+void UP2PopCallback(void *ptr)
 {
   up2=false;
 }
-void DW2PushCallback(void *ptr)  // Press event for button DW2
+
+void DW2PushCallback(void *ptr)
 {
-  A_F_cycle_s = A_F_cycle_s - increment;
-  
-  if(A_F_cycle_s<=-1){
-    A_F_cycle_s=59;
-    A_F_cycle_m--;
-  }
-  
+  first_cycle_time_ = max(first_cycle_time_ - increment, 0);
   delay(time_click);
   i=0;
   dw2=true;
 }
-void DW2PopCallback(void *ptr)  // Press event for button DW
+
+void DW2PopCallback(void *ptr)
 {
   dw2=false;
-}// End of press event
-
+}
 
 //---------Pause time-------------------------------------------------
-void UP3PushCallback(void *ptr)  // Press event for button UP3
+void UP3PushCallback(void *ptr)
 {
-  A_P_s = A_P_s + increment;
-
-
-  if(A_P_s>=60){
-    A_P_s=0;
-    A_P_m++;
-  }
-  
+  // TODO: check if total time became more that TIME_MAX
+  pause_time_ = min(pause_time_ + increment, TIME_MAX);
   delay(time_click);
   i=0;
   up3=true;
-}  // End of press event
-void UP3PopCallback(void *ptr)  // Press event for button UP
+}
+
+void UP3PopCallback(void *ptr)
 {
   up3=false;
 }
-void DW3PushCallback(void *ptr)  // Press event for button DW3
-{
-  A_P_s = A_P_s - increment;
 
-    if(A_P_s<=-1){
-    A_P_s=59;
-    A_P_m--;
-  }
+void DW3PushCallback(void *ptr)
+{
+  pause_time_ = max(pause_time_ - increment, 0);
   delay(time_click);
   i=0;
   dw3=true;
 }
-void DW3PopCallback(void *ptr)  // Press event for button DW
+
+void DW3PopCallback(void *ptr)
 {
   dw3=false;
-}// End of press event
+}
 
-
-//---------Repeate. cycle-------------------------------------------------
-void UP4PushCallback(void *ptr)  // Press event for button UP4
+//---------Repetition cycle-------------------------------------------------
+void UP4PushCallback(void *ptr)
 {
-  A_R_s = A_R_s + increment;
-
-    if(A_R_s>=60){
-    A_R_s=0;
-    A_R_m++;
-  }
+  // TODO: check if total time became more that TIME_MAX
+  rep_cycle_time_ = min(rep_cycle_time_ + increment, TIME_MAX);
   delay(time_click);
   i=0;
   up4=true;
-}  // End of press event
-void UP4PopCallback(void *ptr)  // Press event for button UP
+}
+
+void UP4PopCallback(void *ptr)
 {
   up4=false;
 }
-void DW4PushCallback(void *ptr)  // Press event for button DW4
-{
-  A_R_s = A_R_s - increment;
 
-    if(A_R_s<=-1){
-    A_R_s=59;
-    A_R_m--;
-  }
+void DW4PushCallback(void *ptr)
+{
+  rep_cycle_time_ = max(rep_cycle_time_ - increment, 0);
   delay(time_click);
   i=0;
   dw4=true;
 }
-void DW4PopCallback(void *ptr)  // Press event for button DW
+void DW4PopCallback(void *ptr)
 {
   dw4=false;
-}// End of press event
-
+}
 
 //---------Angle FORWARD-------------------------------------------------
 void UP5PushCallback(void *ptr)  // Press event for button UP5
@@ -363,6 +323,7 @@ void UP5PushCallback(void *ptr)  // Press event for button UP5
   i=0;
   up5=true;
 }  // End of press event
+
 void UP5PopCallback(void *ptr)  // Press event for button UP
 {
   up5=false;
@@ -412,8 +373,8 @@ void UP7PushCallback(void *ptr)  // Press event for button UP7
   A_Speed = A_Speed + increment;
   if(A_Speed>=100)
   A_Speed=100;
-  Serial.println("");  
-  Serial.println("========================");  
+  Serial.println("");
+  Serial.println("========================");
   up7=true;
   delay(time_click);
   i=0;
@@ -437,9 +398,8 @@ void DW7PopCallback(void *ptr)  // Press event for button DW
   dw7=false;
 }// End of press event
 
-
-
 void setup() {
+
   Serial.begin(9600);  // Start serial comunication at baud=9600
  // delay(500);  // This dalay is just in case the nextion display didn't start yet, to be sure it will receive the following command.
 //  Serial.print("baud=115200");  // Set new baud rate of nextion to 115200, but it's temporal. Next time nextion is power on,
@@ -488,280 +448,222 @@ nexInit();
   DW5.attachPop(DW5PopCallback, &DW5);  // Button press
   DW6.attachPop(DW6PopCallback, &DW6);  // Button press
   DW7.attachPop(DW7PopCallback, &DW7);  // Button press
-  
+
   // End of registering the event callback functions
-  
+
     // Declare pins as output:
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
 }
 
+void updateNexVal(const char *name, unsigned int val)
+{
+  Serial.print(name);
+  Serial.print(val);
+  Serial.write(0xff);
+  Serial.write(0xff);
+  Serial.write(0xff);
+}
+
+void updateTime(const char *min_name, const char *sec_name, int time_sec)
+{
+  updateNexVal(min_name, time_sec / 60);
+  updateNexVal(sec_name, time_sec % 60);
+}
+
 void loop() {
   delay(30);  // This is the only delay on this loop.
-//----Display Total time--------------------
-    Serial.print("T_time_m.val=");  
-    Serial.print(A_ST_m); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("T_time_s.val=");  
-    Serial.print(A_ST_s); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
 
 //----Display Total time--------------------
-    Serial.print("ST_m.val=");  
-    Serial.print(A_ST_m); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("ST_s.val=");  
-    Serial.print(A_ST_s); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
+  updateTime("T_time_m.val=", "T_time_s.val=", total_time_);
+
+  // TODO: Display current cycle time
+
+  //----Display Total time--------------------
+  updateTime("ST_m.val=", "ST_s.val=", total_time_);
 
 //----Display First cycle time--------------------
-    Serial.print("F_cycle_m.val=");  
-    Serial.print(A_F_cycle_m); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("F_cycle_s.val=");  
-    Serial.print(A_F_cycle_s); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
+  updateTime("F_cycle_m.val=", "F_cycle_s.val=", first_cycle_time_);
 
 //----Display Pause time--------------------
-    Serial.print("P_m.val=");  
-    Serial.print(A_P_m); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("P_s.val=");  
-    Serial.print(A_P_s); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);  
+  updateTime("P_m.val=", "P_s.val=", pause_time_);
 
 //----Display Repeate cycle time--------------------
-    Serial.print("R_m.val=");  
-    Serial.print(A_R_m); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
-    Serial.print("R_s.val=");  
-    Serial.print(A_R_s); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);  
+  updateTime("R_m.val=", "R_s.val=", rep_cycle_time_);
 
 //----Display Angle Forward--------------------
-    Serial.print("AF.val=");  
-    Serial.print(A_AF); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
+  updateNexVal("AF.val=", A_AF);
 
 //----Display Angle Reverce--------------------
-    Serial.print("AR.val=");  
-    Serial.print(A_AR); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
+  updateNexVal("AR.val=", A_AR);
 
 //----Display Speed--------------------
-    Serial.print("Speed.val=");  
-    Serial.print(A_Speed); 
-    Serial.write(0xff);  
-    Serial.write(0xff);
-    Serial.write(0xff);
+  updateNexVal("Speed.val=", A_Speed);
 
-    nexLoop(nex_listen_list);  // Check for any touch event
-    i=i+1;
-    if(up1){
-       A_ST_s = A_ST_s + increment + i;
-       if(A_ST_s>=60){
-        A_ST_s=0;
-        A_ST_m=A_ST_m+1;
-      }
-    }
-    
-    if(up2){
-      
-        A_F_cycle_s = A_F_cycle_s + increment+i;
-    
-          if(A_F_cycle_s>=60){
-        A_F_cycle_s=0;
-        A_F_cycle_m++;
-      }
-    }
-    if(up3){
-      
-        A_P_s = A_P_s + increment+i;
-    
-    
-      if(A_P_s>=60){
-        A_P_s=0;
-        A_P_m++;
-      }
-      
-    }
-    if(up4){
-        A_R_s = A_R_s + increment+i;
-    
-        if(A_R_s>=60){
-        A_R_s=0;
-        A_R_m++;
-      }
-      
-    }
-    
-    if(up5){
-      A_AF = A_AF + increment+i;
-    }
-    
-    if(up6){
-      
-      A_AR = A_AR + increment+i;
-    }
-    
-    if(up7){
-      A_Speed = A_Speed + increment+i;
-      if(A_Speed>=100)A_Speed=100;
-      Serial.print("A_Speed= ");  Serial.println(A_Speed);
-      Serial.print("A_Speed= ");  Serial.println(A_Speed);
-    }
-    
-    
-    if(dw1){
-       A_ST_s = A_ST_s - increment-i;
-          if(A_ST_s<=-1){
-        A_ST_s=59;
-        A_ST_m=A_ST_m-1;
-        if(A_ST_m<=-1){
-        A_ST_m=0;
-        A_ST_s=0;}
-      }
-      
-    }
-    if(dw2){
-       A_F_cycle_s = A_F_cycle_s - increment-i;
-      
-      if(A_F_cycle_s<=-1){
-        A_F_cycle_s=59;
-        A_F_cycle_m--;
-      }
-      
-    }
-    if(dw3){
-       A_P_s = A_P_s - increment-i;
-    
-        if(A_P_s<=-1){
-        A_P_s=59;
-        A_P_m--;
-      }
-    }
-    if(dw4){
-       A_R_s = A_R_s - increment-i;
-    
-        if(A_R_s<=-1){
-        A_R_s=59;
-        A_R_m--;
-      }
-    }
-    if(dw5){
-     A_AF = A_AF - increment-i;
-     if(A_AF<=0)A_AF=0;
-    }
-    if(dw6){
-     A_AR = A_AR - increment-i;
-     if(A_AR<=0)A_AR=0;
-    }
-    if(dw7){
-     A_Speed = A_Speed - increment-i;
-     if(A_Speed<=0)
-     A_Speed=0;
-     Serial.print("A_Speed= ");  Serial.println(A_Speed);
-     Serial.print("A_Speed= ");  Serial.println(A_Speed);
-    }
-delay_motion=10;//10ms
-if(A_Start){
-//==================Stepper motion==========================
+  nexLoop(nex_listen_list); // Check for any touch event
 
-//calculate parameters------------------------------------------------------------------------------
-      A_ST=(A_ST_s+60*A_ST_m);//ms
-      A_F_cycle=(A_F_cycle_s+60*A_F_cycle_m);//ms
-      A_P=(A_P_s+60*A_P_m);//ms
-      A_R=(A_R_s+60*A_R_m);//ms
-      float a=A_Speed;
-      delay_motion=round((min_speed-max_speed)*(1-a/100)+max_speed);// calculate time of delay(ms)
-      Step_F=round(A_AF*200/360);//N°of Steeps for Forward Angle
-      Step_R=round(A_AR*200/360);//N°of Steeps for  Revers Angle
-      Serial.println("===================================================================================="); 
-      Serial.print("A_ST= ");  Serial.println(A_ST);
-      Serial.print("A_F_cycle= ");  Serial.println(A_F_cycle);
-      Serial.print("A_P= ");  Serial.println(A_P);
-      Serial.print("A_R= ");  Serial.println(A_R);
-      Serial.print("Step_F= ");  Serial.println(Step_F);
-      Serial.print("Step_R= ");  Serial.println(Step_R);
-      Serial.print("A_Speed= ");  Serial.println(A_Speed);
-      Serial.print("delay_motion= ");  Serial.println(delay_motion);
-      Serial.println("====================================================================================");
-//--------------------------------------------------------------------------------------------------  
-
-//First cycle---------------------------------------
-  unsigned int j=0;
-  unsigned int A_ST_m = 5;
-unsigned int A_ST_s = 0;
-unsigned int  A_ST = 0;
-  while(2*delay_motion*j<A_F_cycle*1000)
-  {
-    Serial.println("First cycle");
-   //go to Forward Angle
-    digitalWrite(dirPin, HIGH);
-    for(int k=0;k<Step_F;k++){
-      digitalWrite(stepPin, HIGH);
-      delay(delay_motion);
-      digitalWrite(stepPin, LOW);
-      delay(delay_motion);
-    }
-    pos=pos+Step_F;
-    //go to Backward Angle
-    digitalWrite(dirPin, LOW);
-    for(int k=0;k<Step_F+Step_R;k++){
-      digitalWrite(stepPin, HIGH);
-      delay(delay_motion);
-      digitalWrite(stepPin, LOW);
-      delay(delay_motion);
-    }
-    pos=pos-(Step_F+Step_R);
-    //go to 0 Angle
-    digitalWrite(dirPin, HIGH);
-    for(int k=0;k<Step_R;k++){
-      digitalWrite(stepPin, HIGH);
-      delay(delay_motion);
-      digitalWrite(stepPin, LOW);
-      delay(delay_motion);
-    }
-    pos=pos+Step_R;
-    j=j+2*(Step_F+Step_R);
-    Serial.print("2*delay_motion*j=");  Serial.println(2*delay_motion*j);
-    Serial.print("A_F_cycle=");  Serial.println(A_F_cycle*1000);
+  i = i + 1;
+  if (up1) {
+    total_time_ = min(total_time_ + increment + i, TIME_MAX);
   }
-//-------------------------------------------------
+  if (up2) {
+    first_cycle_time_ = min(first_cycle_time_ + increment + i, TIME_MAX);
+  }
+  if (up3) {
+    pause_time_ = min(pause_time_ + increment + i, TIME_MAX);
+  }
+  if (up4) {
+    rep_cycle_time_ = min(rep_cycle_time_ + increment + i, TIME_MAX);
+  }
 
+  if (up5) {
+    A_AF = A_AF + increment + i;
+  }
+  if (up6) {
+    A_AR = A_AR + increment + i;
+  }
 
-//Repeat cycle-------------------------------------
-  r=round((A_ST-A_F_cycle)/(A_P+A_R));//N°of Repeat 
-  Serial.println("-------------");
-  Serial.println("-------------");
-  Serial.print("A_F_cycle=");  Serial.println(A_F_cycle);
-  Serial.print("r=");  Serial.println(r);
-  for(int i=0;i<r;i++){
-    Serial.println("Pause");
+  if (up7) {
+    A_Speed = A_Speed + increment + i;
+    if (A_Speed >= 100) {
+      A_Speed = 100;
+    }
+    Serial.print("A_Speed= ");
+    Serial.println(A_Speed);
+    Serial.print("A_Speed= ");
+    Serial.println(A_Speed);
+  }
+
+  if (dw1) {
+    total_time_ = max(total_time_ - increment - i, 0);
+  }
+  if (dw2) {
+    first_cycle_time_ = max(first_cycle_time_ - increment - i, 0);
+  }
+  if (dw3) {
+    pause_time_ = max(pause_time_ - increment - i, 0);
+  }
+  if (dw4) {
+    rep_cycle_time_ = max(rep_cycle_time_ - increment - i, 0);
+  }
+
+  if (dw5) {
+    A_AF = A_AF - increment - i;
+    if (A_AF <= 0)
+      A_AF = 0;
+  }
+  if (dw6) {
+    A_AR = A_AR - increment - i;
+    if (A_AR <= 0)
+      A_AR = 0;
+  }
+  if (dw7) {
+    A_Speed = A_Speed - increment - i;
+    if (A_Speed <= 0)
+      A_Speed = 0;
+    Serial.print("A_Speed= ");
+    Serial.println(A_Speed);
+    Serial.print("A_Speed= ");
+    Serial.println(A_Speed);
+  }
+
+  delay_motion = 10; //10ms
+  if (A_Start)
+  {
+    //==================Stepper motion==========================
+
+    //calculate parameters------------------------------------------------------------------------------
+    // TODO: Delete it later
+    // A_ST = (A_ST_s + 60 * A_ST_m);                //ms
+    // A_F_cycle = (A_F_cycle_s + 60 * A_F_cycle_m); //ms
+    // A_P = (A_P_s + 60 * A_P_m);                   //ms
+    // A_R = (A_R_s + 60 * A_R_m);                   //ms
+    A_ST = total_time_;
+    A_F_cycle = first_cycle_time_;
+    A_P = pause_time_;
+    A_R = rep_cycle_time_;
+
+    float a = A_Speed;
+    delay_motion = round((min_speed - max_speed) * (1 - a / 100) + max_speed); // calculate time of delay(ms)
+    Step_F = round(A_AF * 200 / 360);                                          //N°of Steeps for Forward Angle
+    Step_R = round(A_AR * 200 / 360);                                          //N°of Steeps for  Revers Angle
+    Serial.println("====================================================================================");
+    Serial.print("A_ST= ");
+    Serial.println(A_ST);
+    Serial.print("A_F_cycle= ");
+    Serial.println(A_F_cycle);
+    Serial.print("A_P= ");
+    Serial.println(A_P);
+    Serial.print("A_R= ");
+    Serial.println(A_R);
+    Serial.print("Step_F= ");
+    Serial.println(Step_F);
+    Serial.print("Step_R= ");
+    Serial.println(Step_R);
+    Serial.print("A_Speed= ");
+    Serial.println(A_Speed);
+    Serial.print("delay_motion= ");
+    Serial.println(delay_motion);
+    Serial.println("====================================================================================");
+    //--------------------------------------------------------------------------------------------------
+
+    //First cycle---------------------------------------
+    unsigned int j = 0;
+    unsigned int A_ST_m = 5;
+    unsigned int A_ST_s = 0;
+    unsigned int A_ST = 0;
+    while (2 * delay_motion * j < A_F_cycle * 1000)
+    {
+      Serial.println("First cycle");
+      //go to Forward Angle
+      digitalWrite(dirPin, HIGH);
+      for (int k = 0; k < Step_F; k++)
+      {
+        digitalWrite(stepPin, HIGH);
+        delay(delay_motion);
+        digitalWrite(stepPin, LOW);
+        delay(delay_motion);
+      }
+      pos = pos + Step_F;
+      //go to Backward Angle
+      digitalWrite(dirPin, LOW);
+      for (int k = 0; k < Step_F + Step_R; k++)
+      {
+        digitalWrite(stepPin, HIGH);
+        delay(delay_motion);
+        digitalWrite(stepPin, LOW);
+        delay(delay_motion);
+      }
+      pos = pos - (Step_F + Step_R);
+      //go to 0 Angle
+      digitalWrite(dirPin, HIGH);
+      for (int k = 0; k < Step_R; k++)
+      {
+        digitalWrite(stepPin, HIGH);
+        delay(delay_motion);
+        digitalWrite(stepPin, LOW);
+        delay(delay_motion);
+      }
+      pos = pos + Step_R;
+      j = j + 2 * (Step_F + Step_R);
+      Serial.print("2*delay_motion*j=");
+      Serial.println(2 * delay_motion * j);
+      Serial.print("A_F_cycle=");
+      Serial.println(A_F_cycle * 1000);
+    }
+    //-------------------------------------------------
+
+    //Repeat cycle-------------------------------------
+    r = round((A_ST - A_F_cycle) / (A_P + A_R)); //N°of Repeat
+    Serial.println("-------------");
+    Serial.println("-------------");
+    Serial.print("A_F_cycle=");
+    Serial.println(A_F_cycle);
+    Serial.print("r=");
+    Serial.println(r);
+    for (int i = 0; i < r; i++)
+    {
+      Serial.println("Pause");
       delay(A_P*1000);
       j=0;
       Serial.println("repeat cycle");
@@ -796,33 +698,30 @@ unsigned int  A_ST = 0;
         pos=pos+Step_R;
         j=j+2*(Step_F+Step_R);
          Serial.print("A_R-2*delay_motion*j= ");  Serial.println(A_R*1000-2*delay_motion*j);
-      } 
+      }
   }
-A_Start=false; 
-}//end Start
-
+A_Start=false;
+  } //end Start
 
     if(A_Left)digitalWrite(dirPin, LOW);
     while (A_Left){
           digitalWrite(stepPin, HIGH);
           delay(delay_motion*10);
           nexLoop(nex_listen_list);  // Check for any touch event
-          
+
           digitalWrite(stepPin, LOW);
           delay(delay_motion*10);
-          nexLoop(nex_listen_list);  // Check for any touch event  
+          nexLoop(nex_listen_list);  // Check for any touch event
 }
     if(A_Right)digitalWrite(dirPin, HIGH);
     while (A_Right){
           digitalWrite(stepPin, HIGH);
           delay(delay_motion*10);
          nexLoop(nex_listen_list);  // Check for any touch event
-          
+
           digitalWrite(stepPin, LOW);
           delay(delay_motion*10);
-        nexLoop(nex_listen_list);  // Check for any touch event  
+        nexLoop(nex_listen_list);  // Check for any touch event
 }
-  
- 
+}
 
-}
