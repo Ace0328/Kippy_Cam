@@ -1,11 +1,11 @@
 /**
  * @file NexConfig.h
  *
- * Options for user can be found here. 
+ * Options for user can be found here.
  *
  * @author  Wu Pengfei (email:<pengfei.wu@itead.cc>)
  * @date    2015/8/13
- * @copyright 
+ * @copyright
  * Copyright (C) 2014-2015 ITEAD Intelligent Systems Co., Ltd. \n
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -16,23 +16,23 @@
 #define __NEXCONFIG_H__
 
 /**
- * @addtogroup Configuration 
- * @{ 
+ * @addtogroup Configuration
+ * @{
  */
-
-/** 
- * Define DEBUG_SERIAL_ENABLE to enable debug serial. 
- * Comment it to disable debug serial. 
- */
-#define DEBUG_SERIAL_ENABLE
 
 /**
- * Define dbSerial for the output of debug messages. 
+ * Define DEBUG_SERIAL_ENABLE to enable debug serial.
+ * Comment it to disable debug serial.
  */
-#define dbSerial Serial
+// #define DEBUG_SERIAL_ENABLE
 
 /**
- * Define nexSerial for communicate with Nextion touch panel. 
+ * Define dbSerial for the output of debug messages.
+ */
+// #define dbSerial Serial
+
+/**
+ * Define nexSerial for communicate with Nextion touch panel.
  */
 #define nexSerial Serial
 
