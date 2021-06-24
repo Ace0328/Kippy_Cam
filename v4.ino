@@ -922,6 +922,9 @@ void loop()
   // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
   if ((millis() - prev_millis_for_GUI) > TIM_MS_INT_GUI) {
     prev_millis_for_GUI = millis();
+    // It's blocking (while serial.available)
+    // and use delay for 10 ms;
+    // Though, if Serial.Available == 0, that it just skips
     nexLoop(nex_listen_list); // Check for any touch event
     if (A_Stop) {
       handleHoldButtons();
@@ -940,10 +943,15 @@ void loop()
 
   if (A_Start) {
     // TODO: Verify all time settings
+
     // Call control function every TIM_MS_INT_CONTROL
+    // It also handles if more than 1 ms passed (in case of print)
     if ((millis() - prev_millis_for_control) > TIM_MS_INT_CONTROL) {
-      prev_millis_for_control = millis();
-      runControl_not_blocking(prev_millis_for_control);
+      int dt = millis() - prev_millis_for_control;
+      for (int i = 0; i < dt; i++) {
+        runControl_not_blocking(prev_millis_for_control + i);
+      }
+      prev_millis_for_control += dt;
     }
 
     if (A_Stop) {
