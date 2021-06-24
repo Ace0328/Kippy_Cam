@@ -699,8 +699,9 @@ int calcStepDelay(int speed_percent)
 
   // To calc delay in ms between every step according to speed:
   // (60 * 1000 msec/min) / ((rotation/min) * (steps/rotation)) = ms between each step
-  int delay = (60 * 1000) / (rot_per_min * STEPS_PER_REV);
-  return delay;
+  unsigned long tmp = 60000LU;
+  tmp /= (rot_per_min * STEPS_PER_REV);
+  return (int)tmp;
 }
 
 // Call with only 1 ms interval
