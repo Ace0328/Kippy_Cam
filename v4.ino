@@ -66,7 +66,7 @@ int first_cycle_time_   = PRESET_FIRST_CYCLE_TIME;
 int pause_time_         = PRESET_PAUSE_TIME;
 int rep_cycle_time_     = PRESET_REP_CYCLE_TIME;
 int current_cycle_time_ = 0;
-int time_left_          = 0;
+unsigned long time_left_ms_ = 0;
 
 struct Motor {
   int pos;
@@ -585,7 +585,7 @@ void displayValues()
 void displayTimeLeft()
 {
   // TODO: Display current cycle time
-  updateTime("T_time_m.val=", "T_time_s.val=", time_left_);
+  updateTime("T_time_m.val=", "T_time_s.val=", time_left_ms_ / 1000);
 }
 
 void handleHoldButtons()
@@ -672,16 +672,14 @@ void motorReset()
     return;
   }
 
-  int d = 0;
-  if ((STEPS_PER_REV - motor.pos) > motor.pos) {
+  int d = STEPS_PER_REV - motor.pos;
+  if (d > motor.pos) {
     digitalWrite(dirPin, BACKWARD);
-    d = -1;
   } else {
     digitalWrite(dirPin, FORWARD);
-    d = 1;
   }
 
-  for (int i = motor.pos; i != 0; i += d) {
+  for (int i = 0; i < d; i++) {
     doMotorStep();
     delay(2); // TODO: The magic.
   }
@@ -707,12 +705,12 @@ int calcStepDelay(int speed_percent)
 // Call with only 1 ms interval
 void runControl_not_blocking(unsigned long time_ms)
 {
-  typedef enum {FirstCycle, Pause, Repeat, MotorRunning, DoNothing} State_e;
+  typedef enum {FirstCycle, Pause, Repeat, MotorRunning, MotorReseting, DoNothing} State_e;
   static State_e state = FirstCycle;
   static State_e next_state;
   static int n_repetitions;
   static int delay_between_steps;
-  static int current_state_time;
+  static unsigned long current_state_time;
   static unsigned long prev_motor_step_time;
 
   if (A_Stop) {
@@ -723,25 +721,30 @@ void runControl_not_blocking(unsigned long time_ms)
   {
   case FirstCycle:
     motorReset();
-    time_left_ = total_time_;
+    time_left_ms_ = (unsigned long)total_time_ * 1000UL;
     n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
     delay_between_steps = calcStepDelay(A_Speed);
-    current_state_time = first_cycle_time_ * 1000;
+    current_state_time = (unsigned long)first_cycle_time_ * 1000UL;
     next_state = Pause;
     state = MotorRunning; // Change state to run motor
     digitalWrite(dirPin, FORWARD);
     break;
   case Pause:
-    current_state_time = pause_time_ * 1000;
+    current_state_time = (unsigned long)pause_time_ * 1000UL;
     next_state = Repeat;
-    state = DoNothing; // Change state to wait
+    if (motor.pos) {
+      // TODO: We could calculate the shortest distance here and direcation
+      state = MotorReseting;
+    } else {
+      state = DoNothing;
+    }
     break;
   case Repeat:
     if (n_repetitions == 1) {
-      current_state_time = time_left_;
+      current_state_time = time_left_ms_;
       next_state = DoNothing;
     } else {
-      current_state_time = rep_cycle_time_ * 1000;
+      current_state_time = (unsigned long)rep_cycle_time_ * 1000UL;
       next_state = Pause;
     }
     n_repetitions--;
@@ -756,6 +759,17 @@ void runControl_not_blocking(unsigned long time_ms)
       motor.pos = motor.pos % STEPS_PER_REV;
     }
     break;
+  case MotorReseting:
+    if ((time_ms - prev_motor_step_time) > delay_between_steps) {
+      prev_motor_step_time = time_ms;
+      doMotorStep();
+      motor.pos++;
+      motor.pos = motor.pos % STEPS_PER_REV;
+      if (motor.pos == 0) {
+        state = DoNothing;
+      }
+    }
+    break;
   case DoNothing:
     break;
   default:
@@ -765,14 +779,14 @@ void runControl_not_blocking(unsigned long time_ms)
   current_state_time--;
   if (current_state_time == 0)
   {
-    if (next_state == Pause) {
-      motorReset();
-    }
+    // if (next_state == Pause) {
+    //   motorReset();
+    // }
     state = next_state;
   }
 
-  time_left_--;
-  if (time_left_ == 0) {
+  time_left_ms_--;
+  if (time_left_ms_ == 0) {
     A_Stop = true;
   }
 }
@@ -921,7 +935,7 @@ void runControl()
 void loop()
 {
   // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
-  if ((millis() - prev_millis_for_GUI) > TIM_MS_INT_GUI) {
+  if ((millis() - prev_millis_for_GUI) >= TIM_MS_INT_GUI) {
     prev_millis_for_GUI = millis();
     // It's blocking (while serial.available)
     // and use delay for 10 ms;
@@ -933,7 +947,7 @@ void loop()
   }
 
   // Update values evert TIM_MS_INT_PRINT ms
-  if ((millis() - prev_millis_for_print) > TIM_MS_INT_PRINT) {
+  if ((millis() - prev_millis_for_print) >= TIM_MS_INT_PRINT) {
     prev_millis_for_print = millis();
     if (A_Stop) {
       displayValues();
@@ -947,12 +961,9 @@ void loop()
 
     // Call control function every TIM_MS_INT_CONTROL
     // It also handles if more than 1 ms passed (in case of print)
-    if ((millis() - prev_millis_for_control) > TIM_MS_INT_CONTROL) {
-      int dt = millis() - prev_millis_for_control;
-      for (int i = 0; i < dt; i++) {
-        runControl_not_blocking(prev_millis_for_control + i);
-      }
-      prev_millis_for_control += dt;
+    if ((millis() - prev_millis_for_control) >= TIM_MS_INT_CONTROL) {
+      prev_millis_for_control = millis();
+      runControl_not_blocking(prev_millis_for_control);
     }
 
     if (A_Stop) {
