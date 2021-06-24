@@ -198,7 +198,7 @@ void StartPushCallback(void *ptr)
 void StopPushCallback(void *ptr)
 {
   A_Stop = true;
-  A_Start = false;
+  // A_Start = false;
 }
 
 //---------Reset button-------------------------------------------------
