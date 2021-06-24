@@ -157,7 +157,7 @@ bool dw6=false;
 bool dw7=false;
 
 bool A_Start = false;
-bool A_Stop = false;
+bool A_Stop = true;
 bool A_Reset = false;
 bool A_Left = false;
 bool A_Right = false;
@@ -665,6 +665,10 @@ void doMotorStep()
 // Or could be very fast: 100 steps * 100 us = 10ms. It's fast spin
 void motorReset()
 {
+  if (motor.pos == 0) {
+    return;
+  }
+
   int d = 0;
   if ((STEPS_PER_REV - motor.pos) > motor.pos) {
     digitalWrite(dirPin, BACKWARD);
@@ -722,6 +726,7 @@ void runControl_not_blocking(unsigned long time_ms)
     current_state_time = first_cycle_time_ * 1000;
     next_state = Pause;
     state = MotorRunning; // Change state to run motor
+    digitalWrite(dirPin, FORWARD);
     break;
   case Pause:
     current_state_time = pause_time_ * 1000;
@@ -738,6 +743,7 @@ void runControl_not_blocking(unsigned long time_ms)
     }
     n_repetitions--;
     state = MotorRunning;
+    digitalWrite(dirPin, FORWARD);
     break;
   case MotorRunning:
     if ((time_ms - prev_motor_step_time) > delay_between_steps) {
