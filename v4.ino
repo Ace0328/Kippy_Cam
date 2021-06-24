@@ -535,6 +535,9 @@ void setup() {
   // Declare pins as output:
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
+
+  A_Start = false;
+  A_Stop = true;
 }
 
 void updateNexVal(const char *name, unsigned int val)
@@ -582,7 +585,7 @@ void displayValues()
 void displayTimeLeft()
 {
   // TODO: Display current cycle time
-  updateTime("ST_m.val=", "ST_s.val=", time_left_);
+  updateTime("T_time_m.val=", "T_time_s.val=", time_left_);
 }
 
 void handleHoldButtons()
@@ -707,7 +710,6 @@ void runControl_not_blocking(unsigned long time_ms)
   static State_e state = FirstCycle;
   static State_e next_state;
   static int n_repetitions;
-  static int time_left;
   static int delay_between_steps;
   static int current_state_time;
   static unsigned long prev_motor_step_time;
@@ -720,7 +722,7 @@ void runControl_not_blocking(unsigned long time_ms)
   {
   case FirstCycle:
     motorReset();
-    time_left = total_time_;
+    time_left_ = total_time_;
     n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
     delay_between_steps = calcStepDelay(A_Speed);
     current_state_time = first_cycle_time_ * 1000;
@@ -735,7 +737,7 @@ void runControl_not_blocking(unsigned long time_ms)
     break;
   case Repeat:
     if (n_repetitions == 1) {
-      current_state_time = time_left;
+      current_state_time = time_left_;
       next_state = DoNothing;
     } else {
       current_state_time = rep_cycle_time_ * 1000;
@@ -768,8 +770,8 @@ void runControl_not_blocking(unsigned long time_ms)
     state = next_state;
   }
 
-  time_left--;
-  if (time_left == 0) {
+  time_left_--;
+  if (time_left_ == 0) {
     A_Stop = true;
   }
 }
