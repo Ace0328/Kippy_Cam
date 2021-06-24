@@ -30,37 +30,50 @@
 
 #include <Nextion.h>
 
-#define dirPin 12
+#define dirPin  12
 #define stepPin 13
 
-#define TIME_MAX (3599)
+enum Dir {
+  FORWARD = HIGH,
+  BACKWARD = LOW
+};
+
+/* Macro-defined constants */
+
+#define MIN_ROT_PER_MINUTE 1
+#define MAX_ROT_PER_MINUTE 50
+
+#define STEPS_PER_REV 200 /*TB66000 configuration*/
+
+#define TIM_MS_INT_PRINT    (200U)
+#define TIM_MS_INT_GUI      (30U) // To read Nex and check holding
+#define TIM_MS_INT_CONTROL  (1U)
+
+#define TIME_MAX (3599) // seconds
 
 #define PRESET_TOTAL_TIME       (10 * 60) // 10 minutes = 600 seconds
 #define PRESET_FIRST_CYCLE_TIME (30)      // 30 seconds
 #define PRESET_PAUSE_TIME       (50)      // 50 seconds
 #define PRESET_REP_CYCLE_TIME   (10)      // 10 seconds
 
+/* Variable constants  */
+const int increment=1;
+const int time_click=5; //wait 5ms
+const int max_speed=3;  //delay(1ms faster speed)
+const int min_speed=15; //delay(500ms slower speed)
+
+/* private variable */
 int total_time_         = PRESET_TOTAL_TIME;
 int first_cycle_time_   = PRESET_FIRST_CYCLE_TIME;
 int pause_time_         = PRESET_PAUSE_TIME;
 int rep_cycle_time_     = PRESET_REP_CYCLE_TIME;
 int current_cycle_time_ = 0;
+int time_left_          = 0;
 
-int max_speed=3;//delay(1ms faster speed)
-int min_speed=15;//delay(500ms slower speed)
-
-unsigned int delay_motion=0;//delay for 1 step ms
-bool A_Start = false;
-bool A_Stop = false;
-bool A_Reset = false;
-bool A_Left = false;
-bool A_Right = false;
-
-unsigned int  A_ST = 0;
-unsigned int  A_CT = 0;
-unsigned int A_F_cycle = 0;
-unsigned int A_P = 0;
-unsigned int A_R = 0;
+struct Motor {
+  int pos;
+};
+Motor motor = {0};
 
 //preset value
 unsigned int A_AF = 185;
@@ -69,14 +82,27 @@ unsigned int A_AR = 80;
 //preset value
 int A_Speed = 85;
 
-int increment=1;
-int time_click=5;//wait 5ms
 int i=0;
 int pos=0;
 unsigned int Step_F=0;
 unsigned int Step_R=0;
 unsigned int r=0;
 
+/* Counters to call function with some periodic interval */
+unsigned long prev_millis_for_GUI = 0;
+unsigned long prev_millis_for_print = 0;
+unsigned long prev_millis_for_control = 0;
+
+/* Depricated */
+unsigned int delay_motion=0;//delay for 1 step ms
+
+unsigned int A_ST = 0;
+unsigned int A_CT = 0;
+unsigned int A_F_cycle = 0;
+unsigned int A_P = 0;
+unsigned int A_R = 0;
+
+/* Nextion buttons and texts */
 NexButton Start = NexButton(0, 15, "Start");  // Button added
 NexButton Stop = NexButton(0, 16, "Stop");  // Button added
 NexButton Reset = NexButton(0, 17, "Reset");  // Button added
@@ -115,6 +141,8 @@ NexNumber AF = NexNumber(0, 45, "AF");  // Number added  Angle FWD
 NexNumber AR = NexNumber(0, 46, "AR");  // Number added  Angle REVERS
 
 NexNumber Speed = NexNumber(0, 49, "Speed");  // Number added  Angle REVERS
+
+// Button hold flags
 bool up1=false;
 bool up2=false;
 bool up3=false;
@@ -130,6 +158,11 @@ bool dw5=false;
 bool dw6=false;
 bool dw7=false;
 
+bool A_Start = false;
+bool A_Stop = false;
+bool A_Reset = false;
+bool A_Left = false;
+bool A_Right = false;
 
 NexTouch *nex_listen_list[] =
 {
@@ -209,6 +242,9 @@ void RightPopCallback(void *ptr)  // Press event for button UP
 //---------Total time-------------------------------------------------
 void UP1PushCallback(void *ptr)  // Press event for button UP1
 {
+  if (A_Start) {
+    return;
+  }
   total_time_ = min(total_time_ + increment, TIME_MAX);
   delay(time_click);
   i=0;
@@ -222,6 +258,9 @@ void UP1PopCallback(void *ptr)  // Press event for button UP
 
 void DW1PushCallback(void *ptr)  // Press event for button DW1
 {
+  if (A_Start) {
+    return;
+  }
   total_time_ = max(total_time_ - increment, 0);
   delay(time_click);
   i=0;
@@ -235,6 +274,9 @@ void DW1PopCallback(void *ptr)  // Press event for button DW
 //---------First cycle-------------------------------------------------
 void UP2PushCallback(void *ptr)  // Press event for button UP2
 {
+  if (A_Start) {
+    return;
+  }
   // TODO: check if total time became more that TIME_MAX
   first_cycle_time_ = min(first_cycle_time_ + increment,  TIME_MAX);
   delay(time_click);
@@ -249,6 +291,9 @@ void UP2PopCallback(void *ptr)
 
 void DW2PushCallback(void *ptr)
 {
+  if (A_Start) {
+    return;
+  }
   first_cycle_time_ = max(first_cycle_time_ - increment, 0);
   delay(time_click);
   i=0;
@@ -263,6 +308,9 @@ void DW2PopCallback(void *ptr)
 //---------Pause time-------------------------------------------------
 void UP3PushCallback(void *ptr)
 {
+  if (A_Start) {
+    return;
+  }
   // TODO: check if total time became more that TIME_MAX
   pause_time_ = min(pause_time_ + increment, TIME_MAX);
   delay(time_click);
@@ -277,6 +325,9 @@ void UP3PopCallback(void *ptr)
 
 void DW3PushCallback(void *ptr)
 {
+  if (A_Start) {
+    return;
+  }
   pause_time_ = max(pause_time_ - increment, 0);
   delay(time_click);
   i=0;
@@ -291,6 +342,9 @@ void DW3PopCallback(void *ptr)
 //---------Repetition cycle-------------------------------------------------
 void UP4PushCallback(void *ptr)
 {
+  if (A_Start) {
+    return;
+  }
   // TODO: check if total time became more that TIME_MAX
   rep_cycle_time_ = min(rep_cycle_time_ + increment, TIME_MAX);
   delay(time_click);
@@ -305,6 +359,9 @@ void UP4PopCallback(void *ptr)
 
 void DW4PushCallback(void *ptr)
 {
+  if (A_Start) {
+    return;
+  }
   rep_cycle_time_ = max(rep_cycle_time_ - increment, 0);
   delay(time_click);
   i=0;
@@ -318,6 +375,9 @@ void DW4PopCallback(void *ptr)
 //---------Angle FORWARD-------------------------------------------------
 void UP5PushCallback(void *ptr)  // Press event for button UP5
 {
+  if (A_Start) {
+    return;
+  }
   A_AF = A_AF + increment;
   delay(time_click);
   i=0;
@@ -330,6 +390,9 @@ void UP5PopCallback(void *ptr)  // Press event for button UP
 }
 void DW5PushCallback(void *ptr)  // Press event for button DW5
 {
+  if (A_Start) {
+    return;
+  }
   A_AF = A_AF - increment;
   if(A_AF<=0)A_AF=0;
   delay(time_click);
@@ -345,6 +408,9 @@ void DW5PopCallback(void *ptr)  // Press event for button DW
 //---------Angle REVERS-------------------------------------------------
 void UP6PushCallback(void *ptr)  // Press event for button UP6
 {
+  if (A_Start) {
+    return;
+  }
   A_AR = A_AR + increment;
   delay(time_click);
   i=0;
@@ -356,6 +422,9 @@ void UP6PopCallback(void *ptr)  // Press event for button UP
 }
 void DW6PushCallback(void *ptr)  // Press event for button DW6
 {
+  if (A_Start) {
+    return;
+  }
   A_AR = A_AR - increment;
   if(A_AR<=0)A_AR=0;
   delay(time_click);
@@ -370,6 +439,9 @@ void DW6PopCallback(void *ptr)  // Press event for button DW
 //---------Speed-------------------------------------------------
 void UP7PushCallback(void *ptr)  // Press event for button UP7
 {
+  if (A_Start) {
+    return;
+  }
   A_Speed = A_Speed + increment;
   if(A_Speed>=100)
   A_Speed=100;
@@ -386,6 +458,9 @@ void UP7PopCallback(void *ptr)  // Press event for button UP7
 }
 void DW7PushCallback(void *ptr)  // Press event for button DW7
 {
+  if (A_Start) {
+    return;
+  }
   A_Speed = A_Speed - increment;
   if(A_Speed<=0)
   A_Speed=0;
@@ -471,15 +546,12 @@ void updateTime(const char *min_name, const char *sec_name, int time_sec)
   updateNexVal(sec_name, time_sec % 60);
 }
 
-void loop() {
-  delay(30);  // This is the only delay on this loop.
-
+void displayValues()
+{
 //----Display Total time--------------------
   updateTime("T_time_m.val=", "T_time_s.val=", total_time_);
 
-  // TODO: Display current cycle time
-
-  //----Display Total time--------------------
+  //----Display left time-----------------------------
   updateTime("ST_m.val=", "ST_s.val=", total_time_);
 
 //----Display First cycle time--------------------
@@ -499,9 +571,16 @@ void loop() {
 
 //----Display Speed--------------------
   updateNexVal("Speed.val=", A_Speed);
+}
 
-  nexLoop(nex_listen_list); // Check for any touch event
+void displayTimeLeft()
+{
+  // TODO: Display current cycle time
+  updateTime("ST_m.val=", "ST_s.val=", time_left_);
+}
 
+void handleHoldButtons()
+{
   i = i + 1;
   if (up1) {
     total_time_ = min(total_time_ + increment + i, TIME_MAX);
@@ -561,15 +640,129 @@ void loop() {
     A_Speed = A_Speed - increment - i;
     if (A_Speed <= 0)
       A_Speed = 0;
-    Serial.print("A_Speed= ");
-    Serial.println(A_Speed);
-    Serial.print("A_Speed= ");
-    Serial.println(A_Speed);
+  }
+}
+
+void doMotorStep()
+{
+  digitalWrite(stepPin, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(stepPin, LOW);
+  delayMicroseconds(5);
+}
+
+// This function takes max 200 ms to complete
+// Or could be very fast: 100 steps * 100 us = 10ms. It's fast spin
+void motorReset()
+{
+  int d = 0;
+  if ((STEPS_PER_REV - motor.pos) > motor.pos) {
+    digitalWrite(dirPin, BACKWARD);
+    d = -1;
+  } else {
+    digitalWrite(dirPin, FORWARD);
+    d = 1;
   }
 
-  delay_motion = 10; //10ms
-  if (A_Start)
+  for (int i = motor.pos; i != 0; i += d) {
+    doMotorStep();
+    delay(2); // TODO: The magic.
+  }
+
+  motor.pos = 0;
+}
+
+int calcStepDelay(int speed_percent)
+{
+  int rot_per_min = MIN_ROT_PER_MINUTE;
+  rot_per_min = (speed_percent - 1);
+  rot_per_min *= (MAX_ROT_PER_MINUTE - MIN_ROT_PER_MINUTE);
+  rot_per_min = round((rot_per_min) / (100.0 - 1.0));
+  rot_per_min += MIN_ROT_PER_MINUTE;
+
+  // To calc delay in ms between every step according to speed:
+  // (60 * 1000 msec/min) / ((rotation/min) * (steps/rotation)) = ms between each step
+  int delay = (60 * 1000) / (rot_per_min * STEPS_PER_REV);
+  return delay;
+}
+
+// Call with only 1 ms interval
+void runControl_not_blocking(unsigned long time_ms)
+{
+  typedef enum {FirstCycle, Pause, Repeat, MotorRunning, DoNothing} State_e;
+  static State_e state = FirstCycle;
+  static State_e next_state;
+  static int n_repetitions;
+  static int time_left;
+  static int delay_between_steps;
+  static int current_state_time;
+  static unsigned long prev_motor_step_time;
+
+  if (A_Stop) {
+    return;
+  }
+
+  switch (state)
   {
+  case FirstCycle:
+    motorReset();
+    time_left = total_time_;
+    n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
+    delay_between_steps = calcStepDelay(A_Speed);
+    current_state_time = first_cycle_time_ * 1000;
+    next_state = Pause;
+    state = MotorRunning; // Change state to run motor
+    break;
+  case Pause:
+    current_state_time = pause_time_ * 1000;
+    next_state = Repeat;
+    state = DoNothing; // Change state to wait
+    break;
+  case Repeat:
+    if (n_repetitions == 1) {
+      current_state_time = time_left;
+      next_state = DoNothing;
+    } else {
+      current_state_time = rep_cycle_time_ * 1000;
+      next_state = Pause;
+    }
+    n_repetitions--;
+    state = MotorRunning;
+    break;
+  case MotorRunning:
+    if ((time_ms - prev_motor_step_time) > delay_between_steps) {
+      prev_motor_step_time = time_ms;
+      doMotorStep();
+      motor.pos++;
+      motor.pos = motor.pos % STEPS_PER_REV;
+    }
+    break;
+  case DoNothing:
+    break;
+  default:
+    break;
+  }
+
+  current_state_time--;
+  if (current_state_time == 0)
+  {
+    if (next_state == Pause) {
+      motorReset();
+    }
+    state = next_state;
+  }
+
+  time_left--;
+  if (time_left == 0) {
+    A_Stop = true;
+  }
+  }
+
+// depricated
+void runControl()
+{
+  delay_motion = 10; //10ms
+
     //==================Stepper motion==========================
 
     //calculate parameters------------------------------------------------------------------------------
@@ -664,64 +857,110 @@ void loop() {
     for (int i = 0; i < r; i++)
     {
       Serial.println("Pause");
-      delay(A_P*1000);
-      j=0;
+    delay(A_P * 1000);
+    j = 0;
       Serial.println("repeat cycle");
-      while(A_R*1000>2*delay_motion*j)
+    while (A_R * 1000 > 2 * delay_motion * j)
       {
        //go to Forward Angle
         digitalWrite(dirPin, HIGH);
-        for(int k=0;k<Step_F;k++){
+      for (int k = 0; k < Step_F; k++)
+      {
           digitalWrite(stepPin, HIGH);
           delay(delay_motion);
           digitalWrite(stepPin, LOW);
           delay(delay_motion);
         }
-        pos=pos+Step_F;
+      pos = pos + Step_F;
         //go to Backward Angle
         digitalWrite(dirPin, LOW);
-        for(int k=0;k<Step_F+Step_R;k++){
+      for (int k = 0; k < Step_F + Step_R; k++)
+      {
           digitalWrite(stepPin, HIGH);
           delay(delay_motion);
           digitalWrite(stepPin, LOW);
           delay(delay_motion);
         }
-        pos=pos-(Step_F+Step_R);
+      pos = pos - (Step_F + Step_R);
         //go to 0 Angle
         digitalWrite(dirPin, HIGH);
-        for(int k=0;k<Step_R;k++){
+      for (int k = 0; k < Step_R; k++)
+      {
           digitalWrite(stepPin, HIGH);
           delay(delay_motion);
           digitalWrite(stepPin, LOW);
           delay(delay_motion);
         }
-        pos=pos+Step_R;
-        j=j+2*(Step_F+Step_R);
-         Serial.print("A_R-2*delay_motion*j= ");  Serial.println(A_R*1000-2*delay_motion*j);
-      }
+      pos = pos + Step_R;
+      j = j + 2 * (Step_F + Step_R);
+      Serial.print("A_R-2*delay_motion*j= ");
+      Serial.println(A_R * 1000 - 2 * delay_motion * j);
+    }
   }
-A_Start=false;
-  } //end Start
-
-    if(A_Left)digitalWrite(dirPin, LOW);
-    while (A_Left){
-          digitalWrite(stepPin, HIGH);
-          delay(delay_motion*10);
-          nexLoop(nex_listen_list);  // Check for any touch event
-
-          digitalWrite(stepPin, LOW);
-          delay(delay_motion*10);
-          nexLoop(nex_listen_list);  // Check for any touch event
 }
-    if(A_Right)digitalWrite(dirPin, HIGH);
-    while (A_Right){
+
+void loop()
+{
+  // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
+  if ((millis() - prev_millis_for_GUI) > TIM_MS_INT_GUI) {
+    prev_millis_for_GUI = millis();
+    nexLoop(nex_listen_list); // Check for any touch event
+    if (A_Stop) {
+      handleHoldButtons();
+    }
+  }
+
+  // Update values evert TIM_MS_INT_PRINT ms
+  if ((millis() - prev_millis_for_print) > TIM_MS_INT_PRINT) {
+    prev_millis_for_print = millis();
+    if (A_Stop) {
+      displayValues();
+    } else {
+      displayTimeLeft();
+    }
+      }
+
+  if (A_Start) {
+    // TODO: Verify all time settings
+    // Call control function every TIM_MS_INT_CONTROL
+    if ((millis() - prev_millis_for_control) > TIM_MS_INT_CONTROL) {
+      prev_millis_for_control = millis();
+      runControl_not_blocking(prev_millis_for_control);
+  }
+
+    if (A_Stop) {
+      A_Start = false;
+      motorReset();
+    }
+  } else {
+    // TODO: Should be refactored
+    // Turn left if the button is held
+    if (A_Left) {
+      digitalWrite(dirPin, LOW);
+    }
+    while (A_Left) {
           digitalWrite(stepPin, HIGH);
-          delay(delay_motion*10);
-         nexLoop(nex_listen_list);  // Check for any touch event
+      delay(delay_motion * 10);
+      nexLoop(nex_listen_list); // Check for any touch event
 
           digitalWrite(stepPin, LOW);
-          delay(delay_motion*10);
-        nexLoop(nex_listen_list);  // Check for any touch event
+      delay(delay_motion * 10);
+      nexLoop(nex_listen_list); // Check for any touch event
+}
+
+    // Turn right if the button is held
+    if (A_Right) {
+      digitalWrite(dirPin, HIGH);
+    }
+    while (A_Right) {
+          digitalWrite(stepPin, HIGH);
+      delay(delay_motion * 10);
+      nexLoop(nex_listen_list); // Check for any touch event
+
+          digitalWrite(stepPin, LOW);
+      delay(delay_motion * 10);
+      nexLoop(nex_listen_list); // Check for any touch event
+    }
 }
 }
 
