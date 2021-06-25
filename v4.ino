@@ -571,15 +571,12 @@ void displaySettings()
   updateNexVal("AF.val=", A_AF);
   updateNexVal("AR.val=", A_AR);
   updateNexVal("Speed.val=", A_Speed);
-
-  /* Display left time */
-  updateTime("T_time_m.val=", "T_time_s.val=", total_time_);
 }
 
 void displayTimeLeft()
 {
   updateTime("T_time_m.val=", "T_time_s.val=", time_left_ms_ / 1000);
-  updateTime("C_cycle_m.val=", "C_cycle_s.val=", current_cycle_left_ms / 1000);
+  updateTime("C_cycle_m.val=", "C_cycle_s.val=", current_cycle_left_ms_ / 1000);
 }
 
 void handleHoldButtons()
