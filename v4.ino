@@ -54,6 +54,10 @@ enum Dir {
 #define PRESET_PAUSE_TIME       (50)      // 50 seconds
 #define PRESET_REP_CYCLE_TIME   (10)      // 10 seconds
 
+#define PRESET_ANGLE_FW (185)
+#define PRESET_ANGLE_BW (80)
+#define PRESET_SPEED    (85)
+
 /* Variable constants  */
 const int increment=1;
 const int time_click=5; //wait 5ms
@@ -61,13 +65,13 @@ const int max_speed=3;  //delay(1ms faster speed)
 const int min_speed=15; //delay(500ms slower speed)
 
 /* private variable */
-int total_time_         = PRESET_TOTAL_TIME;
-int first_cycle_time_   = PRESET_FIRST_CYCLE_TIME;
-int pause_time_         = PRESET_PAUSE_TIME;
-int rep_cycle_time_     = PRESET_REP_CYCLE_TIME;
-int current_cycle_time_ = 0;
-unsigned long time_left_ms_ = 0;
-unsigned long current_cycle_left_ms_ = 0;
+int total_time_;
+int first_cycle_time_;
+int pause_time_;
+int rep_cycle_time_;
+int current_cycle_time_;
+unsigned long time_left_ms_;
+unsigned long current_cycle_left_ms_;
 
 struct Motor {
   int pos;
@@ -79,12 +83,9 @@ Motor motor = {0, 0, 0, FORWARD};
 
 bool running_;
 
-//preset value
-unsigned int A_AF = 185;
-unsigned int A_AR = 80;
-
-//preset value
-int A_Speed = 85;
+unsigned int A_AF;
+unsigned int A_AR;
+int A_Speed;
 
 int i=0;
 int pos=0;
@@ -164,7 +165,6 @@ bool dw7=false;
 
 bool start_shaking_ = false;
 bool stop_shaking_ = false;
-bool A_Reset = false;
 bool A_Left = false;
 bool A_Right = false;
 
@@ -193,6 +193,18 @@ NexTouch *nex_listen_list[] =
   NULL  // String terminated
 };  // End of touch event list
 
+void resetSettingsToDefault()
+{
+  total_time_ = PRESET_TOTAL_TIME;
+  first_cycle_time_ = PRESET_FIRST_CYCLE_TIME;
+  pause_time_ = PRESET_PAUSE_TIME;
+  pause_time_ = PRESET_REP_CYCLE_TIME;
+
+  A_AF = PRESET_ANGLE_FW;
+  A_AR = PRESET_ANGLE_BW;
+  A_Speed = PRESET_SPEED;
+}
+
 //---------Start button-------------------------------------------------
 void StartPushCallback(void *ptr)
 {
@@ -211,12 +223,11 @@ void StopPushCallback(void *ptr)
 //---------Reset button-------------------------------------------------
 void ResetPushCallback(void *ptr)
 {
-  A_Reset = true;
+  if (running_) {
+    return;
 }
-
-void ResetPopCallback(void *ptr)
-{
-  A_Reset=false;
+  resetSettingsToDefault();
+  motorReset();
 }
 
 //---------Left button-------------------------------------------------
@@ -503,7 +514,6 @@ void setup() {
   Start.attachPush(StartPushCallback, &Start); // Button press
   Stop.attachPush(StopPushCallback, &Stop);    // Button press
   Reset.attachPush(ResetPushCallback, &Reset); // Button press
-  Reset.attachPop(ResetPopCallback, &Reset);   // Button press
   Left.attachPush(LeftPushCallback, &Left);    // Button press
   Left.attachPop(LeftPopCallback, &Left);      // Button press
   Right.attachPush(RightPushCallback, &Right); // Button press
@@ -542,6 +552,8 @@ void setup() {
   // Declare pins as output:
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
+
+  resetSettingsToDefault();
 
   start_shaking_ = false;
   stop_shaking_ = false;
