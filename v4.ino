@@ -71,8 +71,11 @@ unsigned long current_cycle_left_ms_ = 0;
 
 struct Motor {
   int pos;
+  int target_fw_pos;
+  int target_bw_pos;
+  int current_dir;
 };
-Motor motor = {0};
+Motor motor = {0, 0, 0, FORWARD};
 
 bool running_;
 
@@ -696,7 +699,7 @@ int calcStepDelay(int speed_percent)
 // Call with only 1 ms interval
 void runControl_not_blocking(unsigned long time_ms)
 {
-  typedef enum {FirstCycle, Pause, Repeat, MotorRunning, MotorReseting, DoNothing} State_e;
+  typedef enum {FirstCycle, Pause, Repeat, Mixing, MotorReseting, DoNothing} State_e;
   static State_e state = FirstCycle;
   static State_e next_state;
   static int n_repetitions;
@@ -710,19 +713,28 @@ void runControl_not_blocking(unsigned long time_ms)
     time_left_ms_ = (unsigned long)total_time_ * 1000UL;
     n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
     delay_between_steps = calcStepDelay(A_Speed);
+    motor.target_fw_pos = (int)((float)A_AF * (STEPS_PER_REV / 360.0));
+    motor.target_bw_pos = -(int)((float)A_AR * (STEPS_PER_REV / 360.0));
+    motor.current_dir = FORWARD;
+    digitalWrite(dirPin, FORWARD);
+
     current_cycle_left_ms_ = (unsigned long)first_cycle_time_ * 1000UL;
     next_state = Pause;
-    state = MotorRunning; // Change state to run motor
-    digitalWrite(dirPin, FORWARD);
+    state = Mixing; // Change state to run motor
     break;
   case Pause:
     current_cycle_left_ms_ = (unsigned long)pause_time_ * 1000UL;
     next_state = Repeat;
-    if (motor.pos) {
-      // TODO: We could calculate the shortest distance here and direcation
-      state = MotorReseting;
-    } else {
+
+    if (motor.pos == 0) {
       state = DoNothing;
+    } else {
+      if (motor.pos < 0) {
+        motor.current_dir = FORWARD;
+      } else {
+        motor.current_dir = BACKWARD;
+      }
+      state = MotorReseting;
     }
     break;
   case Repeat:
@@ -734,23 +746,37 @@ void runControl_not_blocking(unsigned long time_ms)
       next_state = Pause;
     }
     n_repetitions--;
-    state = MotorRunning;
+    state = Mixing;
     digitalWrite(dirPin, FORWARD);
     break;
-  case MotorRunning:
+  case Mixing:
     if ((time_ms - prev_motor_step_time) > delay_between_steps) {
       prev_motor_step_time = time_ms;
       doMotorStep();
+      if (motor.current_dir == FORWARD) {
       motor.pos++;
-      motor.pos = motor.pos % STEPS_PER_REV;
+        if (motor.pos == motor.target_fw_pos) {
+          motor.current_dir = BACKWARD;
+          digitalWrite(dirPin, BACKWARD);
+        }
+      } else {
+        motor.pos--;
+        if (motor.pos == motor.target_bw_pos) {
+          motor.current_dir = FORWARD;
+          digitalWrite(dirPin, FORWARD);
+        }
+      }
     }
     break;
   case MotorReseting:
     if ((time_ms - prev_motor_step_time) > delay_between_steps) {
       prev_motor_step_time = time_ms;
       doMotorStep();
-      motor.pos++;
-      motor.pos = motor.pos % STEPS_PER_REV;
+      if (motor.current_dir == FORWARD) {
+        motor.pos++;
+      } else {
+        motor.pos--;
+      }
       if (motor.pos == 0) {
         state = DoNothing;
       }
