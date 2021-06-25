@@ -658,24 +658,25 @@ void doMotorStep()
   delayMicroseconds(5);
 }
 
-// This function takes max 200 ms to complete
-// Or could be very fast: 100 steps * 100 us = 10ms. It's fast spin
+// This function takes max 1 s to complete
 void motorReset()
 {
+  const int step_delay = 5;
+
   if (motor.pos == 0) {
     return;
-  }
-
-  int d = STEPS_PER_REV - motor.pos;
-  if (d > motor.pos) {
+  } else if (motor.pos > 0) {
     digitalWrite(dirPin, BACKWARD);
+    for (int i = 0; i < motor.pos; i++) {
+      doMotorStep();
+      delay(step_delay);
+    }
   } else {
     digitalWrite(dirPin, FORWARD);
-  }
-
-  for (int i = 0; i < d; i++) {
-    doMotorStep();
-    delay(2); // TODO: The magic.
+    for (int i = motor.pos; i < 0; i++) {
+      doMotorStep();
+      delay(step_delay);
+    }
   }
 
   motor.pos = 0;
@@ -773,7 +774,7 @@ void runControl_not_blocking(unsigned long time_ms)
       prev_motor_step_time = time_ms;
       doMotorStep();
       if (motor.current_dir == FORWARD) {
-        motor.pos++;
+         motor.pos++;
       } else {
         motor.pos--;
       }
