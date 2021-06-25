@@ -67,11 +67,14 @@ int pause_time_         = PRESET_PAUSE_TIME;
 int rep_cycle_time_     = PRESET_REP_CYCLE_TIME;
 int current_cycle_time_ = 0;
 unsigned long time_left_ms_ = 0;
+unsigned long current_cycle_left_ms_ = 0;
 
 struct Motor {
   int pos;
 };
 Motor motor = {0};
+
+bool running_;
 
 //preset value
 unsigned int A_AF = 185;
@@ -156,8 +159,8 @@ bool dw5=false;
 bool dw6=false;
 bool dw7=false;
 
-bool A_Start = false;
-bool A_Stop = true;
+bool start_shaking_ = false;
+bool stop_shaking_ = false;
 bool A_Reset = false;
 bool A_Left = false;
 bool A_Right = false;
@@ -190,15 +193,16 @@ NexTouch *nex_listen_list[] =
 //---------Start button-------------------------------------------------
 void StartPushCallback(void *ptr)
 {
-  A_Start = true;
-  A_Stop = false;
+  if (running_) {
+    return;
+  }
+  start_shaking_ = true;
 }
 
 //---------Stop button-------------------------------------------------
 void StopPushCallback(void *ptr)
 {
-  A_Stop = true;
-  // A_Start = false;
+  stop_shaking_ = true;
 }
 
 //---------Reset button-------------------------------------------------
@@ -239,7 +243,7 @@ void RightPopCallback(void *ptr)
 //---------Total time-------------------------------------------------
 void UP1PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   total_time_ = min(total_time_ + increment, TIME_MAX);
@@ -255,7 +259,7 @@ void UP1PopCallback(void *ptr)
 
 void DW1PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   total_time_ = max(total_time_ - increment, 0);
@@ -272,7 +276,7 @@ void DW1PopCallback(void *ptr)
 //---------First cycle-------------------------------------------------
 void UP2PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   // TODO: check if total time became more that TIME_MAX
@@ -289,7 +293,7 @@ void UP2PopCallback(void *ptr)
 
 void DW2PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   first_cycle_time_ = max(first_cycle_time_ - increment, 0);
@@ -306,7 +310,7 @@ void DW2PopCallback(void *ptr)
 //---------Pause time-------------------------------------------------
 void UP3PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   // TODO: check if total time became more that TIME_MAX
@@ -323,7 +327,7 @@ void UP3PopCallback(void *ptr)
 
 void DW3PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   pause_time_ = max(pause_time_ - increment, 0);
@@ -340,7 +344,7 @@ void DW3PopCallback(void *ptr)
 //---------Repetition cycle-------------------------------------------------
 void UP4PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   // TODO: check if total time became more that TIME_MAX
@@ -357,7 +361,7 @@ void UP4PopCallback(void *ptr)
 
 void DW4PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   rep_cycle_time_ = max(rep_cycle_time_ - increment, 0);
@@ -373,7 +377,7 @@ void DW4PopCallback(void *ptr)
 //---------Angle FORWARD-------------------------------------------------
 void UP5PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_AF = A_AF + increment;
@@ -389,7 +393,7 @@ void UP5PopCallback(void *ptr)
 
 void DW5PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_AF = A_AF - increment;
@@ -407,7 +411,7 @@ void DW5PopCallback(void *ptr)
 //---------Angle REVERS-------------------------------------------------
 void UP6PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_AR = A_AR + increment;
@@ -423,7 +427,7 @@ void UP6PopCallback(void *ptr)
 
 void DW6PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_AR = A_AR - increment;
@@ -441,7 +445,7 @@ void DW6PopCallback(void *ptr)
 //---------Speed-------------------------------------------------
 void UP7PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_Speed = A_Speed + increment;
@@ -461,7 +465,7 @@ void UP7PopCallback(void *ptr)
 
 void DW7PushCallback(void *ptr)
 {
-  if (A_Start) {
+  if (running_) {
     return;
   }
   A_Speed = A_Speed - increment;
@@ -536,8 +540,9 @@ void setup() {
   pinMode(stepPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
 
-  A_Start = false;
-  A_Stop = true;
+  start_shaking_ = false;
+  stop_shaking_ = false;
+  running_ = false;
 }
 
 void updateNexVal(const char *name, unsigned int val)
@@ -555,37 +560,26 @@ void updateTime(const char *min_name, const char *sec_name, int time_sec)
   updateNexVal(sec_name, time_sec % 60);
 }
 
-void displayValues()
+void displaySettings()
 {
-  //----Display Total time--------------------
-  updateTime("T_time_m.val=", "T_time_s.val=", total_time_);
-
-  //----Display left time-----------------------------
+  /* Display settings */
   updateTime("ST_m.val=", "ST_s.val=", total_time_);
-
-  //----Display First cycle time--------------------
   updateTime("F_cycle_m.val=", "F_cycle_s.val=", first_cycle_time_);
-
-  //----Display Pause time--------------------
   updateTime("P_m.val=", "P_s.val=", pause_time_);
-
-  //----Display Repeate cycle time--------------------
   updateTime("R_m.val=", "R_s.val=", rep_cycle_time_);
 
-  //----Display Angle Forward--------------------
   updateNexVal("AF.val=", A_AF);
-
-  //----Display Angle Reverce--------------------
   updateNexVal("AR.val=", A_AR);
-
-  //----Display Speed--------------------
   updateNexVal("Speed.val=", A_Speed);
+
+  /* Display left time */
+  updateTime("T_time_m.val=", "T_time_s.val=", total_time_);
 }
 
 void displayTimeLeft()
 {
-  // TODO: Display current cycle time
   updateTime("T_time_m.val=", "T_time_s.val=", time_left_ms_ / 1000);
+  updateTime("C_cycle_m.val=", "C_cycle_s.val=", current_cycle_left_ms / 1000);
 }
 
 void handleHoldButtons()
@@ -710,12 +704,7 @@ void runControl_not_blocking(unsigned long time_ms)
   static State_e next_state;
   static int n_repetitions;
   static int delay_between_steps;
-  static unsigned long current_state_time;
   static unsigned long prev_motor_step_time;
-
-  if (A_Stop) {
-    return;
-  }
 
   switch (state)
   {
@@ -724,13 +713,13 @@ void runControl_not_blocking(unsigned long time_ms)
     time_left_ms_ = (unsigned long)total_time_ * 1000UL;
     n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
     delay_between_steps = calcStepDelay(A_Speed);
-    current_state_time = (unsigned long)first_cycle_time_ * 1000UL;
+    current_cycle_left_ms_ = (unsigned long)first_cycle_time_ * 1000UL;
     next_state = Pause;
     state = MotorRunning; // Change state to run motor
     digitalWrite(dirPin, FORWARD);
     break;
   case Pause:
-    current_state_time = (unsigned long)pause_time_ * 1000UL;
+    current_cycle_left_ms_ = (unsigned long)pause_time_ * 1000UL;
     next_state = Repeat;
     if (motor.pos) {
       // TODO: We could calculate the shortest distance here and direcation
@@ -741,10 +730,10 @@ void runControl_not_blocking(unsigned long time_ms)
     break;
   case Repeat:
     if (n_repetitions == 1) {
-      current_state_time = time_left_ms_;
+      current_cycle_left_ms_ = time_left_ms_;
       next_state = DoNothing;
     } else {
-      current_state_time = (unsigned long)rep_cycle_time_ * 1000UL;
+      current_cycle_left_ms_ = (unsigned long)rep_cycle_time_ * 1000UL;
       next_state = Pause;
     }
     n_repetitions--;
@@ -776,18 +765,15 @@ void runControl_not_blocking(unsigned long time_ms)
     break;
   }
 
-  current_state_time--;
-  if (current_state_time == 0)
+  current_cycle_left_ms_--;
+  if (current_cycle_left_ms_ == 0)
   {
-    // if (next_state == Pause) {
-    //   motorReset();
-    // }
     state = next_state;
   }
 
   time_left_ms_--;
   if (time_left_ms_ == 0) {
-    A_Stop = true;
+    stop_shaking_ = true;
   }
 }
 
@@ -941,7 +927,7 @@ void loop()
     // and use delay for 10 ms;
     // Though, if Serial.Available == 0, that it just skips
     nexLoop(nex_listen_list); // Check for any touch event
-    if (A_Stop) {
+    if (!running_) {
       handleHoldButtons();
     }
   }
@@ -949,16 +935,20 @@ void loop()
   // Update values evert TIM_MS_INT_PRINT ms
   if ((millis() - prev_millis_for_print) >= TIM_MS_INT_PRINT) {
     prev_millis_for_print = millis();
-    if (A_Stop) {
-      displayValues();
+    if (!running_) {
+      displaySettings();
     } else {
       displayTimeLeft();
     }
   }
 
-  if (A_Start) {
-    // TODO: Verify all time settings
+  if (start_shaking_) {
+    // TODO: Verify all time settings before running
+    running_ = true;
+    start_shaking_ = false;
+  }
 
+  if (running_) {
     // Call control function every TIM_MS_INT_CONTROL
     // It also handles if more than 1 ms passed (in case of print)
     if ((millis() - prev_millis_for_control) >= TIM_MS_INT_CONTROL) {
@@ -966,9 +956,13 @@ void loop()
       runControl_not_blocking(prev_millis_for_control);
     }
 
-    if (A_Stop) {
-      A_Start = false;
+    if (stop_shaking_) {
+      running_ = false;
+      stop_shaking_ = false;
+      current_cycle_left_ms_ = 0;
+      time_left_ms_ = 0;
       motorReset();
+      displayTimeLeft();
     }
   } else {
     // TODO: Should be refactored
