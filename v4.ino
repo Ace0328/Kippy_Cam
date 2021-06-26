@@ -1,32 +1,7 @@
 #include <math.h>
+#include <Nextion.h>
 
-#include <doxygen.h>
-#include <NexButton.h>
-#include <NexCheckbox.h>
-#include <NexConfig.h>
-#include <NexCrop.h>
-#include <NexDualStateButton.h>
-#include <NexGauge.h>
-#include <NexGpio.h>
-#include <NexHardware.h>
-#include <NexHotspot.h>
-#include <NexNumber.h>
-#include <NexObject.h>
-#include <NexPage.h>
-#include <NexPicture.h>
-#include <NexProgressBar.h>
-#include <NexRadio.h>
-#include <NexRtc.h>
-#include <NexScrolltext.h>
-#include <NexSlider.h>
-#include <NexText.h>
-#include <NexTimer.h>
-#include <Nextion.h>
-#include <NexTouch.h>
-#include <NexUpload.h>
-#include <NexVariable.h>
-#include <NexWaveform.h>
-#include <Nextion.h>
+/* Used Pins */
 
 #define dirPin  12
 #define stepPin 13
@@ -41,7 +16,9 @@ enum Dir {
 #define MIN_ROT_PER_MINUTE 1
 #define MAX_ROT_PER_MINUTE 50
 
-#define STEPS_PER_REV 200 /*TB66000 configuration*/
+/*TB66000 configuration*/
+#define TB6600_STEPS_PER_REV  3200
+#define TB6600_PULSE_WIDTH_US 5
 
 #define TIM_MS_INT_PRINT    (200U)
 #define TIM_MS_INT_GUI      (30U) // To read Nex and check holding
@@ -64,7 +41,83 @@ const int time_click=5; //wait 5ms
 const int max_speed=3;  //delay(1ms faster speed)
 const int min_speed=15; //delay(500ms slower speed)
 
+class MotorNew
+{
+public:
+  MotorNew(int step_pin, int dir_pin, int pulse_w)
+    : step_pin_(step_pin)
+    , dir_pin_(dir_pin)
+    , pulse_w_(pulse_w)
+    , pos_(0)
+  {
+    pinMode(step_pin_, OUTPUT);
+    pinMode(step_pin_, OUTPUT);
+
+    setDir(FORWARD);
+  }
+
+  void doStep() {
+    digitalWrite(step_pin_, HIGH);
+    delayMicroseconds(pulse_w_);
+    digitalWrite(step_pin_, LOW);
+
+    if (dir_ == FORWARD) {
+      pos_++;
+    } else {
+      pos_--;
+    }
+  }
+
+  int pos() const {
+    return pos_;
+  }
+
+  Dir dir() const {
+    return dir_;
+  }
+
+  void setDir(Dir dir) {
+    dir_ = dir;
+    digitalWrite(dir_pin_, dir_);
+  }
+
+  void reset(int delay_us) {
+    if (pos_ > 0) {
+      setDir(BACKWARD);
+    } else {
+      setDir(FORWARD);
+    }
+    pos_ %= TB6600_STEPS_PER_REV;
+    Serial.println(__func__);
+    Serial.println(pos_);
+    while (pos_ != 0) {
+      doStep();
+      delayMicroseconds(delay_us);
+    }
+    setDir(FORWARD);
+  }
+
+  void changeDir() {
+    if (dir_ == FORWARD) {
+      dir_ = BACKWARD;
+    } else {
+      dir_ = FORWARD;
+    }
+    digitalWrite(dir_pin_, dir_);
+  }
+
+  private:
+    const int step_pin_;
+    const int dir_pin_;
+    const int pulse_w_;
+
+    int pos_;
+    Dir dir_;
+};
+
 /* private variable */
+MotorNew motor_new = MotorNew(stepPin, dirPin, TB6600_PULSE_WIDTH_US);
+
 int total_time_;
 int first_cycle_time_;
 int pause_time_;
@@ -192,6 +245,242 @@ NexTouch *nex_listen_list[] =
   &DW7,  // Button added
   NULL  // String terminated
 };  // End of touch event list
+
+/* Function prototypes */
+void StartPushCallback(void *ptr);
+void StopPushCallback(void *ptr);
+void ResetPushCallback(void *ptr);
+void LeftPushCallback(void *ptr);
+void LeftPopCallback(void *ptr);
+void RightPushCallback(void *ptr);
+void RightPopCallback(void *ptr);
+void UP1PushCallback(void *ptr);
+void UP1PopCallback(void *ptr);
+void DW1PushCallback(void *ptr);
+void DW1PopCallback(void *ptr);
+void UP2PushCallback(void *ptr);
+void UP2PopCallback(void *ptr);
+void DW2PushCallback(void *ptr);
+void DW2PopCallback(void *ptr);
+void UP3PushCallback(void *ptr);
+void UP3PopCallback(void *ptr);
+void DW3PushCallback(void *ptr);
+void DW3PopCallback(void *ptr);
+void UP4PushCallback(void *ptr);
+void UP4PopCallback(void *ptr);
+void DW4PushCallback(void *ptr);
+void DW4PopCallback(void *ptr);
+void UP5PushCallback(void *ptr);
+void UP5PopCallback(void *ptr);
+void DW5PushCallback(void *ptr);
+void DW5PopCallback(void *ptr);
+void UP6PushCallback(void *ptr);
+void UP6PopCallback(void *ptr);
+void DW6PushCallback(void *ptr);
+void DW6PopCallback(void *ptr);
+void UP7PushCallback(void *ptr);
+void UP7PopCallback(void *ptr);
+void DW7PushCallback(void *ptr);
+void DW7PopCallback(void *ptr);
+
+void resetSettingsToDefault();
+void updateNexVal(const char *name, unsigned int val);
+void updateTime(const char *min_name, const char *sec_name, int time_sec);
+void displayTimeLeft();
+void displaySettings();
+void handleHoldButtons();
+void doMotorStep();
+void motorReset();
+int calcStepDelayMicrosec(int speed_percent);
+void runControl_not_blocking(unsigned long time_ms);
+void runControl();
+void motorTestControl();
+
+/*====================================================================*/
+void setup() {
+
+  Serial.begin(9600); // Start serial comunication at baud=9600
+  // delay(500);  // This dalay is just in case the nextion display didn't start yet, to be sure it will receive the following command.
+  //  Serial.print("baud=115200");  // Set new baud rate of nextion to 115200, but it's temporal. Next time nextion is power on,
+  //  Serial.write(0xff);  // We always have to send this three lines after each command sent to nextion.
+  //  Serial.write(0xff);
+  //  Serial.write(0xff);
+  //  Serial.end();  // End the serial comunication of baud=9600
+  // Serial.begin(115200);  // Start serial comunication at baud=115200
+
+  nexInit();
+
+  // Register the event callback functions of each touch event:
+  Start.attachPush(StartPushCallback, &Start); // Button press
+  Stop.attachPush(StopPushCallback, &Stop);    // Button press
+  Reset.attachPush(ResetPushCallback, &Reset); // Button press
+  Left.attachPush(LeftPushCallback, &Left);    // Button press
+  Left.attachPop(LeftPopCallback, &Left);      // Button press
+  Right.attachPush(RightPushCallback, &Right); // Button press
+  Right.attachPop(RightPopCallback, &Right);   // Button press
+
+  UP1.attachPush(UP1PushCallback, &UP1); // Button press
+  UP2.attachPush(UP2PushCallback, &UP2); // Button press
+  UP3.attachPush(UP3PushCallback, &UP3); // Button press
+  UP4.attachPush(UP4PushCallback, &UP4); // Button press
+  UP5.attachPush(UP5PushCallback, &UP5); // Button press
+  UP6.attachPush(UP6PushCallback, &UP6); // Button press
+  UP7.attachPush(UP7PushCallback, &UP7); // Button press
+  UP1.attachPop(UP1PopCallback, &UP1);   // Button press
+  UP2.attachPop(UP2PopCallback, &UP2);   // Button press
+  UP3.attachPop(UP3PopCallback, &UP3);   // Button press
+  UP4.attachPop(UP4PopCallback, &UP4);   // Button press
+  UP5.attachPop(UP5PopCallback, &UP5);   // Button press
+  UP6.attachPop(UP6PopCallback, &UP6);   // Button press
+  UP7.attachPop(UP7PopCallback, &UP7);   // Button press
+
+  DW1.attachPush(DW1PushCallback, &DW1); // Button press
+  DW2.attachPush(DW2PushCallback, &DW2); // Button press
+  DW3.attachPush(DW3PushCallback, &DW3); // Button press
+  DW4.attachPush(DW4PushCallback, &DW4); // Button press
+  DW5.attachPush(DW5PushCallback, &DW5); // Button press
+  DW6.attachPush(DW6PushCallback, &DW6); // Button press
+  DW7.attachPush(DW7PushCallback, &DW7); // Button press
+  DW1.attachPop(DW1PopCallback, &DW1);   // Button press
+  DW2.attachPop(DW2PopCallback, &DW2);   // Button press
+  DW3.attachPop(DW3PopCallback, &DW3);   // Button press
+  DW4.attachPop(DW4PopCallback, &DW4);   // Button press
+  DW5.attachPop(DW5PopCallback, &DW5);   // Button press
+  DW6.attachPop(DW6PopCallback, &DW6);   // Button press
+  DW7.attachPop(DW7PopCallback, &DW7);   // Button press
+
+  // Declare pins as output:
+  pinMode(stepPin, OUTPUT);
+  pinMode(dirPin, OUTPUT);
+
+  resetSettingsToDefault();
+
+  start_shaking_ = false;
+  stop_shaking_ = false;
+  running_ = false;
+
+  int angle = 180;
+  int steps = (int)((float)angle * (TB6600_STEPS_PER_REV / 360.0));
+
+  int speed = 100; //%
+  int step_delay = calcStepDelayMicrosec(speed);
+
+  motor_new.setDir(BACKWARD);
+
+  Serial.println();
+  Serial.println(step_delay);
+
+  // It'll make 10 rotations
+  for (int j = 0; j < 1; j++) {
+    for (int i = 0; i < steps; i++) {
+      motor_new.doStep();
+      delayMicroseconds(step_delay);
+    }
+  }
+
+  Serial.print("Pos =");
+  Serial.println(motor_new.pos());
+
+  motor_new.reset(step_delay);
+}
+
+void loop()
+{
+  // static unsigned int stop_counter = 1000;
+  // const static int step_delay = calcStepDelay(10);
+
+  // if (running_) {
+  //   motor_new.doStep();
+  //   if ((motor_new.pos() == 90) || (motor_new.pos() == -90)) {
+  //     motor_new.changeDir();
+  //   }
+  //   delay(step_delay);
+  // }
+
+
+  // if (stop_counter-- == 0) {
+  //   running_ = false;
+  //   motor_new.reset(2);
+  //   // motorReset();
+  // }
+
+
+  // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
+  // if ((millis() - prev_millis_for_GUI) >= TIM_MS_INT_GUI) {
+  //   prev_millis_for_GUI = millis();
+  //   // It's blocking (while serial.available)
+  //   // and use delay for 10 ms;
+  //   // Though, if Serial.Available == 0, that it just skips
+  //   nexLoop(nex_listen_list); // Check for any touch event
+  //   if (!running_) {
+  //     handleHoldButtons();
+  //   }
+  // }
+
+  // Update values evert TIM_MS_INT_PRINT ms
+  // if ((millis() - prev_millis_for_print) >= TIM_MS_INT_PRINT) {
+  //   prev_millis_for_print = millis();
+  //   if (!running_) {
+  //     displaySettings();
+  //   } else {
+  //     displayTimeLeft();
+  //   }
+  // }
+
+  // if (start_shaking_) {
+  //   // TODO: Verify all time settings before running
+  //   running_ = true;
+  //   start_shaking_ = false;
+
+  // }
+
+  // if (running_) {
+  //   // Call control function every TIM_MS_INT_CONTROL
+  //   // It also handles if more than 1 ms passed (in case of print)
+  //   if ((millis() - prev_millis_for_control) >= TIM_MS_INT_CONTROL) {
+  //     prev_millis_for_control = millis();
+  //     runControl_not_blocking(prev_millis_for_control);
+  //   }
+
+  //   if (stop_shaking_) {
+  //     running_ = false;
+  //     stop_shaking_ = false;
+  //     current_cycle_left_ms_ = 0;
+  //     time_left_ms_ = 0;
+  //     motorReset();
+  //     displayTimeLeft();
+  //   }
+  // } else {
+  //   // TODO: Should be refactored
+  //   // Turn left if the button is held
+  //   if (A_Left) {
+  //     digitalWrite(dirPin, LOW);
+  //   }
+  //   while (A_Left) {
+  //     digitalWrite(stepPin, HIGH);
+  //     delay(delay_motion * 10);
+  //     nexLoop(nex_listen_list); // Check for any touch event
+
+  //     digitalWrite(stepPin, LOW);
+  //     delay(delay_motion * 10);
+  //     nexLoop(nex_listen_list); // Check for any touch event
+  //   }
+
+  //   // Turn right if the button is held
+  //   if (A_Right) {
+  //     digitalWrite(dirPin, HIGH);
+  //   }
+  //   while (A_Right) {
+  //     digitalWrite(stepPin, HIGH);
+  //     delay(delay_motion * 10);
+  //     nexLoop(nex_listen_list); // Check for any touch event
+
+  //     digitalWrite(stepPin, LOW);
+  //     delay(delay_motion * 10);
+  //     nexLoop(nex_listen_list); // Check for any touch event
+  //   }
+  // }
+}
 
 void resetSettingsToDefault()
 {
@@ -495,71 +784,6 @@ void DW7PopCallback(void *ptr)
   dw7=false;
 }
 
-
-/*====================================================================*/
-void setup() {
-
-  Serial.begin(9600); // Start serial comunication at baud=9600
-  // delay(500);  // This dalay is just in case the nextion display didn't start yet, to be sure it will receive the following command.
-  //  Serial.print("baud=115200");  // Set new baud rate of nextion to 115200, but it's temporal. Next time nextion is power on,
-  //  Serial.write(0xff);  // We always have to send this three lines after each command sent to nextion.
-  //  Serial.write(0xff);
-  //  Serial.write(0xff);
-  //  Serial.end();  // End the serial comunication of baud=9600
-  // Serial.begin(115200);  // Start serial comunication at baud=115200
-
-  nexInit();
-
-  // Register the event callback functions of each touch event:
-  Start.attachPush(StartPushCallback, &Start); // Button press
-  Stop.attachPush(StopPushCallback, &Stop);    // Button press
-  Reset.attachPush(ResetPushCallback, &Reset); // Button press
-  Left.attachPush(LeftPushCallback, &Left);    // Button press
-  Left.attachPop(LeftPopCallback, &Left);      // Button press
-  Right.attachPush(RightPushCallback, &Right); // Button press
-  Right.attachPop(RightPopCallback, &Right);   // Button press
-
-  UP1.attachPush(UP1PushCallback, &UP1); // Button press
-  UP2.attachPush(UP2PushCallback, &UP2); // Button press
-  UP3.attachPush(UP3PushCallback, &UP3); // Button press
-  UP4.attachPush(UP4PushCallback, &UP4); // Button press
-  UP5.attachPush(UP5PushCallback, &UP5); // Button press
-  UP6.attachPush(UP6PushCallback, &UP6); // Button press
-  UP7.attachPush(UP7PushCallback, &UP7); // Button press
-  UP1.attachPop(UP1PopCallback, &UP1);   // Button press
-  UP2.attachPop(UP2PopCallback, &UP2);   // Button press
-  UP3.attachPop(UP3PopCallback, &UP3);   // Button press
-  UP4.attachPop(UP4PopCallback, &UP4);   // Button press
-  UP5.attachPop(UP5PopCallback, &UP5);   // Button press
-  UP6.attachPop(UP6PopCallback, &UP6);   // Button press
-  UP7.attachPop(UP7PopCallback, &UP7);   // Button press
-
-  DW1.attachPush(DW1PushCallback, &DW1); // Button press
-  DW2.attachPush(DW2PushCallback, &DW2); // Button press
-  DW3.attachPush(DW3PushCallback, &DW3); // Button press
-  DW4.attachPush(DW4PushCallback, &DW4); // Button press
-  DW5.attachPush(DW5PushCallback, &DW5); // Button press
-  DW6.attachPush(DW6PushCallback, &DW6); // Button press
-  DW7.attachPush(DW7PushCallback, &DW7); // Button press
-  DW1.attachPop(DW1PopCallback, &DW1);   // Button press
-  DW2.attachPop(DW2PopCallback, &DW2);   // Button press
-  DW3.attachPop(DW3PopCallback, &DW3);   // Button press
-  DW4.attachPop(DW4PopCallback, &DW4);   // Button press
-  DW5.attachPop(DW5PopCallback, &DW5);   // Button press
-  DW6.attachPop(DW6PopCallback, &DW6);   // Button press
-  DW7.attachPop(DW7PopCallback, &DW7);   // Button press
-
-  // Declare pins as output:
-  pinMode(stepPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
-
-  resetSettingsToDefault();
-
-  start_shaking_ = false;
-  stop_shaking_ = false;
-  running_ = false;
-}
-
 void updateNexVal(const char *name, unsigned int val)
 {
   Serial.print(name);
@@ -694,18 +918,24 @@ void motorReset()
   motor.pos = 0;
 }
 
-int calcStepDelay(int speed_percent)
+int calcStepDelayMicrosec(int speed_percent)
 {
-  int rot_per_min = MIN_ROT_PER_MINUTE;
+  long rot_per_min = MIN_ROT_PER_MINUTE;
   rot_per_min = (speed_percent - 1);
   rot_per_min *= (MAX_ROT_PER_MINUTE - MIN_ROT_PER_MINUTE);
   rot_per_min = round((rot_per_min) / (100.0 - 1.0));
   rot_per_min += MIN_ROT_PER_MINUTE;
 
+  if (rot_per_min < MIN_ROT_PER_MINUTE) {
+    rot_per_min = MIN_ROT_PER_MINUTE;
+  } else if (rot_per_min > MAX_ROT_PER_MINUTE) {
+    rot_per_min = MAX_ROT_PER_MINUTE;
+  }
+
   // To calc delay in ms between every step according to speed:
   // (60 * 1000 msec/min) / ((rotation/min) * (steps/rotation)) = ms between each step
-  unsigned long tmp = 60000LU;
-  tmp /= (rot_per_min * STEPS_PER_REV);
+  unsigned long tmp = 60*1000LU*1000LU;
+  tmp /= (rot_per_min * TB6600_STEPS_PER_REV);
   return (int)tmp;
 }
 
@@ -954,80 +1184,47 @@ void runControl()
   }
 }
 
-void loop()
+// class Mixing
+// {
+//   Mixing(const Settings &s) {
+//     time_left_ms = (unsigned long) s.total_time * 1000UL;
+//     n_repetitions = (s.total_time - s.first_cycle_time)
+//                     / (s.pause_time - s.rep_cycle_time);
+
+
+//   }
+
+//   void Stop() {
+//   }
+
+//   int timeLeft() {
+//     return (int)(time_left_ms / 1000);
+//   }
+
+//   int timeLeftCycle() {
+//     return (int)(curent_cycle_left_ms_ / 1000);
+//   }
+
+//   void runLoop() {
+
+//   }
+
+//   private:
+//     unsigned long time_left_ms;
+//     unsigned long current_cycle_left_ms;
+//     int n_repetitions;
+//     int delay_between_steps;
+//     int target_fw_pos;
+//     int target_bw_pos;
+// };
+
+struct Settings
 {
-  // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
-  if ((millis() - prev_millis_for_GUI) >= TIM_MS_INT_GUI) {
-    prev_millis_for_GUI = millis();
-    // It's blocking (while serial.available)
-    // and use delay for 10 ms;
-    // Though, if Serial.Available == 0, that it just skips
-    nexLoop(nex_listen_list); // Check for any touch event
-    if (!running_) {
-      handleHoldButtons();
-    }
-  }
-
-  // Update values evert TIM_MS_INT_PRINT ms
-  if ((millis() - prev_millis_for_print) >= TIM_MS_INT_PRINT) {
-    prev_millis_for_print = millis();
-    if (!running_) {
-      displaySettings();
-    } else {
-      displayTimeLeft();
-    }
-  }
-
-  if (start_shaking_) {
-    // TODO: Verify all time settings before running
-    running_ = true;
-    start_shaking_ = false;
-  }
-
-  if (running_) {
-    // Call control function every TIM_MS_INT_CONTROL
-    // It also handles if more than 1 ms passed (in case of print)
-    if ((millis() - prev_millis_for_control) >= TIM_MS_INT_CONTROL) {
-      prev_millis_for_control = millis();
-      runControl_not_blocking(prev_millis_for_control);
-    }
-
-    if (stop_shaking_) {
-      running_ = false;
-      stop_shaking_ = false;
-      current_cycle_left_ms_ = 0;
-      time_left_ms_ = 0;
-      motorReset();
-      displayTimeLeft();
-    }
-  } else {
-    // TODO: Should be refactored
-    // Turn left if the button is held
-    if (A_Left) {
-      digitalWrite(dirPin, LOW);
-    }
-    while (A_Left) {
-      digitalWrite(stepPin, HIGH);
-      delay(delay_motion * 10);
-      nexLoop(nex_listen_list); // Check for any touch event
-
-      digitalWrite(stepPin, LOW);
-      delay(delay_motion * 10);
-      nexLoop(nex_listen_list); // Check for any touch event
-    }
-
-    // Turn right if the button is held
-    if (A_Right) {
-      digitalWrite(dirPin, HIGH);
-    }
-    while (A_Right) {
-      digitalWrite(stepPin, HIGH);
-      delay(delay_motion * 10);
-      nexLoop(nex_listen_list); // Check for any touch event
-
-      digitalWrite(stepPin, LOW);
-      delay(delay_motion * 10);
-      nexLoop(nex_listen_list); // Check for any touch event
-    }
-  }
-}
+  int total_time;
+  int firct_cycle_time;
+  int pause_time;
+  int rep_cycle_time;
+  int speed;
+  int angle_forward;
+  int angle_backward;
+};
