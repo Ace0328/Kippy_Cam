@@ -357,52 +357,34 @@ void setup() {
 
   start_shaking_ = false;
   stop_shaking_ = false;
-  running_ = false;
-
-  int angle = 180;
-  int steps = (int)((float)angle * (TB6600_STEPS_PER_REV / 360.0));
-
-  int speed = 100; //%
-  int step_delay = calcStepDelayMicrosec(speed);
-
-  motor_new.setDir(BACKWARD);
-
-  Serial.println();
-  Serial.println(step_delay);
-
-  // It'll make 10 rotations
-  for (int j = 0; j < 1; j++) {
-    for (int i = 0; i < steps; i++) {
-      motor_new.doStep();
-      delayMicroseconds(step_delay);
-    }
-  }
-
-  Serial.print("Pos =");
-  Serial.println(motor_new.pos());
-
-  motor_new.reset(step_delay);
+  running_ = true;
 }
 
 void loop()
 {
-  // static unsigned int stop_counter = 1000;
-  // const static int step_delay = calcStepDelay(10);
+  const static int step_delay = calcStepDelayMicrosec(50);
+  static unsigned long prev_step_time_us = 0;
 
-  // if (running_) {
-  //   motor_new.doStep();
-  //   if ((motor_new.pos() == 90) || (motor_new.pos() == -90)) {
-  //     motor_new.changeDir();
-  //   }
-  //   delay(step_delay);
-  // }
+  if ((millis() % 500) == 0) {
+    delay(10);
+  }
 
+  if (running_) {
+    if ((micros() - prev_step_time_us) > step_delay) {
+      prev_step_time_us = micros();
+      motor_new.doStep();
 
-  // if (stop_counter-- == 0) {
-  //   running_ = false;
-  //   motor_new.reset(2);
-  //   // motorReset();
-  // }
+      if ((motor_new.pos() == 800) || (motor_new.pos() == -800)) {
+        motor_new.changeDir();
+        Serial.println("Change dir");
+    }
+  }
+    if (millis() > 10000) {
+      running_ = false;
+      Serial.println("Reseting");
+  motor_new.reset(step_delay);
+}
+  }
 
 
   // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
