@@ -41,6 +41,56 @@ const int time_click=5; //wait 5ms
 const int max_speed=3;  //delay(1ms faster speed)
 const int min_speed=15; //delay(500ms slower speed)
 
+/* Function prototypes */
+void StartPushCallback(void *ptr);
+void StopPushCallback(void *ptr);
+void ResetPushCallback(void *ptr);
+void LeftPushCallback(void *ptr);
+void LeftPopCallback(void *ptr);
+void RightPushCallback(void *ptr);
+void RightPopCallback(void *ptr);
+void UP1PushCallback(void *ptr);
+void UP1PopCallback(void *ptr);
+void DW1PushCallback(void *ptr);
+void DW1PopCallback(void *ptr);
+void UP2PushCallback(void *ptr);
+void UP2PopCallback(void *ptr);
+void DW2PushCallback(void *ptr);
+void DW2PopCallback(void *ptr);
+void UP3PushCallback(void *ptr);
+void UP3PopCallback(void *ptr);
+void DW3PushCallback(void *ptr);
+void DW3PopCallback(void *ptr);
+void UP4PushCallback(void *ptr);
+void UP4PopCallback(void *ptr);
+void DW4PushCallback(void *ptr);
+void DW4PopCallback(void *ptr);
+void UP5PushCallback(void *ptr);
+void UP5PopCallback(void *ptr);
+void DW5PushCallback(void *ptr);
+void DW5PopCallback(void *ptr);
+void UP6PushCallback(void *ptr);
+void UP6PopCallback(void *ptr);
+void DW6PushCallback(void *ptr);
+void DW6PopCallback(void *ptr);
+void UP7PushCallback(void *ptr);
+void UP7PopCallback(void *ptr);
+void DW7PushCallback(void *ptr);
+void DW7PopCallback(void *ptr);
+
+void resetSettingsToDefault();
+void updateNexVal(const char *name, unsigned int val);
+void updateTime(const char *min_name, const char *sec_name, int time_sec);
+void displayTimeLeft();
+void displaySettings();
+void handleHoldButtons();
+void doMotorStep();
+void motorReset();
+int calcStepDelayMicrosec(int speed_percent);
+void runControl_not_blocking(unsigned long time_ms);
+void runControl();
+void motorTestControl();
+
 class MotorNew
 {
 public:
@@ -98,12 +148,12 @@ public:
   }
 
   void changeDir() {
+    Serial.println(__func__);
     if (dir_ == FORWARD) {
-      dir_ = BACKWARD;
+      setDir(BACKWARD);
     } else {
-      dir_ = FORWARD;
+      setDir(FORWARD);
     }
-    digitalWrite(dir_pin_, dir_);
   }
 
   private:
@@ -115,8 +165,181 @@ public:
     Dir dir_;
 };
 
+struct Settings
+{
+  int total_time;
+  int first_cycle_time;
+  int pause_time;
+  int rep_cycle_time;
+  int speed;
+  int angle_forward;
+  int angle_backward;
+};
+
+class Mixer
+{
+  public:
+  Mixer(const Settings &s, MotorNew *m)
+    : state_(PrepFirstCycle)
+    , next_state_(DoNothing)
+  {
+    motor_ptr_ = m;
+
+    time_left_us_ = (unsigned long) s.total_time * 1000UL;
+    n_repetitions_ = (s.total_time - s.first_cycle_time)
+                    / (s.pause_time - s.rep_cycle_time);
+    delay_between_steps_us_ = calcStepDelayMicrosec(s.speed);
+
+    target_fw_pos_ = (int)((float)s.angle_forward * (TB6600_STEPS_PER_REV / 360.0));
+    target_bw_pos_ = -(int)((float)s.angle_backward * (TB6600_STEPS_PER_REV / 360.0));
+
+    Serial.print("Time left us = "); Serial.println(time_left_us_);
+    Serial.print("N rep = "); Serial.println(n_repetitions_);
+    Serial.print("Delay step = "); Serial.println(delay_between_steps_us_);
+    Serial.print("Target FW pos = "); Serial.println(target_fw_pos_);
+    Serial.print("Target BW pos = "); Serial.println(target_bw_pos_);
+
+    settings_ = s;
+  }
+
+  void runLoop() {
+
+    if (!running_) {
+      return;
+    }
+
+    switch(state_) {
+      case PrepFirstCycle:
+        Serial.println("FirstCycle started");
+        current_cycle_left_us_ = (unsigned long)settings_.first_cycle_time * 1000UL;
+        prev_millis_ = millis();
+        motor_ptr_->setDir(FORWARD);
+        next_state_ = PrepPause;
+        state_ = MotorRun;
+        break;
+      case PrepPause:
+        Serial.println("Pause started");
+        current_cycle_left_us_ = (unsigned long)settings_.pause_time * 1000UL;
+        next_state_ = PrepRepetition;
+        if (motor_ptr_->pos() == 0) {
+          state_ = DoNothing;
+        } else {
+          if (motor_ptr_->pos() < 0) {
+            motor_ptr_->setDir(FORWARD);
+          } else {
+            motor_ptr_->setDir(BACKWARD);
+          }
+          state_ = MotorReset;
+        }
+        break;
+      case PrepRepetition:
+        Serial.println("Repetition started");
+        if (n_repetitions_ == 1) {
+          current_cycle_left_us_ = time_left_us_;
+          next_state_ = DoNothing;
+        } else {
+          current_cycle_left_us_ = (unsigned long)settings_.rep_cycle_time * 1000UL;
+          next_state_ = PrepPause;
+        }
+        n_repetitions_--;
+        motor_ptr_->setDir(FORWARD);
+        state_ = MotorRun;
+        break;
+      case MotorRun:
+        // TODO: After 71 mins there'll be micros() overflow
+        if ((micros() - prev_step_time_us_) > delay_between_steps_us_) {
+          prev_step_time_us_ = micros();
+          motor_ptr_->doStep();
+          if ((motor_ptr_->pos() == target_fw_pos_) || (motor_ptr_->pos() == target_bw_pos_)) {
+            motor_ptr_->changeDir();
+          }
+        }
+        break;
+      case MotorReset:
+        // TODO: After 71 mins there'll be micros() overflow
+        if ((micros() - prev_step_time_us_) > delay_between_steps_us_) {
+          prev_step_time_us_ = micros();
+          motor_ptr_->doStep();
+          if (motor_ptr_->pos() == 0) {
+            state_ = DoNothing;
+          }
+        }
+        break;
+      case DoNothing:
+        break;
+      default:
+        break;
+    }
+
+    updateTime();
+    if (current_cycle_left_us_ == 0) {
+      state_ = next_state_;
+    }
+    if (time_left_us_ == 0) {
+      Serial.println("Time left");
+      running_ = false;
+    }
+  }
+
+  void Stop() {
+    running_ = false;
+  }
+
+  void Start() {
+    running_ = true;
+  }
+
+  bool isRunning() const {
+    return running_;
+  }
+
+  int timeLeft() {
+    return (int)(time_left_us_ / 1000);
+  }
+
+  int timeLeftCycle() {
+    return (int)(current_cycle_left_us_ / 1000);
+  }
+
+  private:
+    void updateTime() {
+      unsigned long dt = millis() - prev_millis_;
+      if (dt) {
+        prev_millis_ += dt;
+        current_cycle_left_us_ = (current_cycle_left_us_ > dt) ? current_cycle_left_us_ - dt : 0;
+        time_left_us_ = (time_left_us_ > dt) ? time_left_us_ - dt : 0;
+      }
+    }
+
+  private:
+    enum State {
+      PrepFirstCycle,
+      PrepPause,
+      PrepRepetition,
+      MotorRun,
+      MotorReset,
+      DoNothing
+    };
+
+    MotorNew *motor_ptr_;
+
+    State state_;
+    State next_state_;
+    Settings settings_;
+    unsigned long time_left_us_;
+    unsigned long current_cycle_left_us_;
+    unsigned long prev_step_time_us_;
+    unsigned long prev_millis_;
+    int n_repetitions_;
+    unsigned long delay_between_steps_us_;
+    int target_fw_pos_;
+    int target_bw_pos_;
+    bool running_;
+};
+
 /* private variable */
 MotorNew motor_new = MotorNew(stepPin, dirPin, TB6600_PULSE_WIDTH_US);
+Mixer mixer = Mixer(Settings(), &motor_new);
 
 int total_time_;
 int first_cycle_time_;
@@ -246,55 +469,6 @@ NexTouch *nex_listen_list[] =
   NULL  // String terminated
 };  // End of touch event list
 
-/* Function prototypes */
-void StartPushCallback(void *ptr);
-void StopPushCallback(void *ptr);
-void ResetPushCallback(void *ptr);
-void LeftPushCallback(void *ptr);
-void LeftPopCallback(void *ptr);
-void RightPushCallback(void *ptr);
-void RightPopCallback(void *ptr);
-void UP1PushCallback(void *ptr);
-void UP1PopCallback(void *ptr);
-void DW1PushCallback(void *ptr);
-void DW1PopCallback(void *ptr);
-void UP2PushCallback(void *ptr);
-void UP2PopCallback(void *ptr);
-void DW2PushCallback(void *ptr);
-void DW2PopCallback(void *ptr);
-void UP3PushCallback(void *ptr);
-void UP3PopCallback(void *ptr);
-void DW3PushCallback(void *ptr);
-void DW3PopCallback(void *ptr);
-void UP4PushCallback(void *ptr);
-void UP4PopCallback(void *ptr);
-void DW4PushCallback(void *ptr);
-void DW4PopCallback(void *ptr);
-void UP5PushCallback(void *ptr);
-void UP5PopCallback(void *ptr);
-void DW5PushCallback(void *ptr);
-void DW5PopCallback(void *ptr);
-void UP6PushCallback(void *ptr);
-void UP6PopCallback(void *ptr);
-void DW6PushCallback(void *ptr);
-void DW6PopCallback(void *ptr);
-void UP7PushCallback(void *ptr);
-void UP7PopCallback(void *ptr);
-void DW7PushCallback(void *ptr);
-void DW7PopCallback(void *ptr);
-
-void resetSettingsToDefault();
-void updateNexVal(const char *name, unsigned int val);
-void updateTime(const char *min_name, const char *sec_name, int time_sec);
-void displayTimeLeft();
-void displaySettings();
-void handleHoldButtons();
-void doMotorStep();
-void motorReset();
-int calcStepDelayMicrosec(int speed_percent);
-void runControl_not_blocking(unsigned long time_ms);
-void runControl();
-void motorTestControl();
 
 /*====================================================================*/
 void setup() {
@@ -358,33 +532,65 @@ void setup() {
   start_shaking_ = false;
   stop_shaking_ = false;
   running_ = true;
+
+  Settings tmp = {.total_time = 120,
+                  .first_cycle_time = 30,
+                  .pause_time = 30,
+                  .rep_cycle_time = 10,
+                  .speed = 85,
+                  .angle_forward = 270,
+                  .angle_backward = 270};
+
+
+  mixer = Mixer(tmp, &motor_new);
+
+  //for (int i = 0; i < 200; i++) {
+    //motor_new.doStep();
+    //delay(3);
+  //}
+  mixer.Start();
 }
 
 void loop()
 {
-  const static int step_delay = calcStepDelayMicrosec(50);
-  static unsigned long prev_step_time_us = 0;
-
   if ((millis() % 500) == 0) {
     delay(10);
   }
 
-  if (running_) {
-    if ((micros() - prev_step_time_us) > step_delay) {
-      prev_step_time_us = micros();
-      motor_new.doStep();
+  if (mixer.isRunning()) {
+    mixer.runLoop();
 
-      if ((motor_new.pos() == 800) || (motor_new.pos() == -800)) {
-        motor_new.changeDir();
-        Serial.println("Change dir");
+    // 10 sec off
+    if (millis() > 10000) {
+      Serial.println("Timeout stop");
+      mixer.Stop();
+      motor_new.reset(375);
     }
   }
-    if (millis() > 10000) {
-      running_ = false;
-      Serial.println("Reseting");
-  motor_new.reset(step_delay);
-}
-  }
+
+  // const static int step_delay = calcStepDelayMicrosec(50);
+  // static unsigned long prev_step_time_us = 0;
+
+  // if ((millis() % 500) == 0) {
+  //   delay(10);
+  // }
+
+  // if (running_) {
+  //   if ((micros() - prev_step_time_us) > step_delay) {
+  //     prev_step_time_us = micros();
+  //     motor_new.doStep();
+
+  //     if ((motor_new.pos() == 800) || (motor_new.pos() == -800)) {
+  //       motor_new.changeDir();
+  //       Serial.println("Change dir");
+  //     }
+  //   }
+  //   if (millis() > 10000) {
+  //     running_ = false;
+  //     Serial.println("Reseting");
+  //     motor_new.reset(step_delay);
+  //   }
+  // }
 
 
   // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
@@ -937,9 +1143,9 @@ void runControl_not_blocking(unsigned long time_ms)
     motorReset();
     time_left_ms_ = (unsigned long)total_time_ * 1000UL;
     n_repetitions = (total_time_ - first_cycle_time_) / (pause_time_ - rep_cycle_time_);
-    delay_between_steps = calcStepDelay(A_Speed);
-    motor.target_fw_pos = (int)((float)A_AF * (STEPS_PER_REV / 360.0));
-    motor.target_bw_pos = -(int)((float)A_AR * (STEPS_PER_REV / 360.0));
+    delay_between_steps = calcStepDelayMicrosec(A_Speed);
+    motor.target_fw_pos = (int)((float)A_AF * (TB6600_STEPS_PER_REV / 360.0));
+    motor.target_bw_pos = -(int)((float)A_AR * (TB6600_STEPS_PER_REV / 360.0));
     motor.current_dir = FORWARD;
     digitalWrite(dirPin, FORWARD);
 
@@ -1165,48 +1371,3 @@ void runControl()
     }
   }
 }
-
-// class Mixing
-// {
-//   Mixing(const Settings &s) {
-//     time_left_ms = (unsigned long) s.total_time * 1000UL;
-//     n_repetitions = (s.total_time - s.first_cycle_time)
-//                     / (s.pause_time - s.rep_cycle_time);
-
-
-//   }
-
-//   void Stop() {
-//   }
-
-//   int timeLeft() {
-//     return (int)(time_left_ms / 1000);
-//   }
-
-//   int timeLeftCycle() {
-//     return (int)(curent_cycle_left_ms_ / 1000);
-//   }
-
-//   void runLoop() {
-
-//   }
-
-//   private:
-//     unsigned long time_left_ms;
-//     unsigned long current_cycle_left_ms;
-//     int n_repetitions;
-//     int delay_between_steps;
-//     int target_fw_pos;
-//     int target_bw_pos;
-// };
-
-struct Settings
-{
-  int total_time;
-  int firct_cycle_time;
-  int pause_time;
-  int rep_cycle_time;
-  int speed;
-  int angle_forward;
-  int angle_backward;
-};
