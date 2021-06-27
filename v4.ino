@@ -174,6 +174,7 @@ class Mixer
   Mixer(const Settings &s, MotorNew *m)
     : state_(PrepFirstCycle)
     , next_state_(DoNothing)
+    , running_(false)
   {
     motor_ptr_ = m;
 
@@ -265,6 +266,8 @@ class Mixer
 
   void Stop() {
     running_ = false;
+    time_left_us_ = 0;
+    current_cycle_left_us_ = 0;
   }
 
   void Start() {
@@ -569,6 +572,9 @@ void ResetPushCallback(void *ptr)
 }
   resetSettingsToDefault();
   motor_new.reset(calcStepDelayMicrosec(settings_.speed));
+
+  displaySettings();
+  displayTimeLeft();
 }
 
 //---------Left button-------------------------------------------------
