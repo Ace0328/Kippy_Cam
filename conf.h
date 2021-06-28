@@ -27,5 +27,10 @@
 #define PRESET_ANGLE_BW (80)
 #define PRESET_SPEED    (85)
 
+/* Tone */
+#define TONE_FREQ_HZ	1000
+#define TONE_START_TIME_S 20 // seconds before the end
+#define TONE_END_TIME_S   19 // seconds before the end. It should be always less than start time
+
 
 #endif // CONF_H

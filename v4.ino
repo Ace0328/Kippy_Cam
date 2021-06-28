@@ -62,6 +62,7 @@ bool dw5=false;
 bool dw6=false;
 bool dw7=false;
 
+bool buzzer_on_;
 bool start_shaking_ = false;
 bool stop_shaking_ = false;
 bool A_Left = false;
@@ -188,6 +189,8 @@ void setup() {
 
   reset_button.begin();
 
+  pinMode(PIN_BUZZER, OUTPUT);
+
   resetSettingsToDefault();
 
   start_shaking_ = false;
@@ -200,6 +203,19 @@ void loop()
 {
   if (mixer.isRunning()) {
     mixer.runLoop();
+
+    // Make a sound
+    if (!buzzer_on_) {
+      if (mixer.timeLeft() <= TONE_START_TIME_S) {
+        tone(PIN_BUZZER, TONE_FREQ_HZ);
+        buzzer_on_ = true;
+      }
+    } else {
+      if (mixer.timeLeft() <= TONE_END_TIME_S) {
+        noTone(PIN_BUZZER);
+      }
+    }
+
 
     if (stop_shaking_ || !mixer.isRunning()) {
       stop_shaking_ = false;
@@ -277,6 +293,7 @@ void loop()
     motor_.enable(true);
     mixer = Mixer(settings_, &motor_);
     mixer.start();
+    buzzer_on_ = false;
   }
 
   if (reset_button.released()) {
