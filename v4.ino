@@ -25,7 +25,7 @@ enum Dir {
 #define TB6600_PULSE_WIDTH_US 5
 
 #define TIM_MS_INT_PRINT    (200U)
-#define TIM_MS_INT_GUI      (30U) // To read Nex and check holding
+#define TIM_MS_INT_GUI      (100U) // To read Nex and check holding
 #define TIM_MS_INT_CONTROL  (1U)
 
 #define TIME_MAX (3599) // seconds
@@ -41,7 +41,7 @@ enum Dir {
 
 /* Variable constants  */
 const int increment=1;
-const int time_click=5; //wait 5ms
+const int time_click=100; //wait 5ms
 const int max_speed=3;  //delay(1ms faster speed)
 const int min_speed=15; //delay(500ms slower speed)
 
@@ -424,16 +424,12 @@ NexTouch *nex_listen_list[] =
 /*====================================================================*/
 void setup() {
 
-  Serial.begin(9600); // Start serial comunication at baud=9600
-  // delay(500);  // This dalay is just in case the nextion display didn't start yet, to be sure it will receive the following command.
-  //  Serial.print("baud=115200");  // Set new baud rate of nextion to 115200, but it's temporal. Next time nextion is power on,
-  //  Serial.write(0xff);  // We always have to send this three lines after each command sent to nextion.
-  //  Serial.write(0xff);
-  //  Serial.write(0xff);
-  //  Serial.end();  // End the serial comunication of baud=9600
-  // Serial.begin(115200);  // Start serial comunication at baud=115200
-
-  nexInit();
+  if (!nexInit()) {
+    // TODO: Failed to initialize the Nextion, go to fault state
+    // for(;;) {
+      // Just freeze the code here
+    // }
+  }
 
   // Register the event callback functions of each touch event:
   Start.attachPush(StartPushCallback, &Start); // Button press
@@ -498,12 +494,12 @@ void loop()
     }
   }
 
-  // Check for any touch event
-  nexLoop(nex_listen_list);
-
   // Read GUI and handle buttons every TIM_MS_INT_GUI (1000/TIM_MS_INT_GUI per sec)
   if ((millis() - prev_millis_for_GUI) >= TIM_MS_INT_GUI) {
     prev_millis_for_GUI = millis();
+
+    // Check for any touch event
+    nexLoop(nex_listen_list);
 
     if (!mixer.isRunning()) {
       handleHoldButtons();
