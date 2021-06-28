@@ -314,7 +314,7 @@ void resetSettingsToDefault()
   settings_.total_time = PRESET_TOTAL_TIME;
   settings_.first_cycle_time = PRESET_FIRST_CYCLE_TIME;
   settings_.pause_time = PRESET_PAUSE_TIME;
-  settings_.pause_time = PRESET_REP_CYCLE_TIME;
+  settings_.rep_cycle_time = PRESET_REP_CYCLE_TIME;
   settings_.angle_forward = PRESET_ANGLE_FW;
   settings_.angle_backward = PRESET_ANGLE_BW;
   settings_.speed = PRESET_SPEED;
