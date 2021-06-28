@@ -2,39 +2,9 @@
 #include <Button.h>
 #include <Nextion.h>
 
+#include "conf.h"
 #include "motor.h"
-
-/* Used Pins */
-
-#define PIN_TB6600_EN     8
-#define dirPin            12
-#define stepPin           13
-#define PIN_BUTTON_RESET  10
-#define PIN_BUZZER        9
-
-/* Macro-defined constants */
-
-#define MIN_ROT_PER_MINUTE 1
-#define MAX_ROT_PER_MINUTE 50
-
-/*TB66000 configuration*/
-#define TB6600_STEPS_PER_REV  3200
-#define TB6600_PULSE_WIDTH_US 5
-
-#define TIM_MS_INT_PRINT    (200U)
-#define TIM_MS_INT_GUI      (100U) // To read Nex and check holding
-#define TIM_MS_INT_CONTROL  (1U)
-
-#define TIME_MAX (3599) // seconds
-
-#define PRESET_TOTAL_TIME       (10 * 60) // 10 minutes = 600 seconds
-#define PRESET_FIRST_CYCLE_TIME (30)      // 30 seconds
-#define PRESET_PAUSE_TIME       (50)      // 50 seconds
-#define PRESET_REP_CYCLE_TIME   (10)      // 10 seconds
-
-#define PRESET_ANGLE_FW (185)
-#define PRESET_ANGLE_BW (80)
-#define PRESET_SPEED    (85)
+#include "mixer.h"
 
 /* Variable constants  */
 const int increment=1;
@@ -81,177 +51,11 @@ void DW7PopCallback(void *ptr);
 
 void resetAll();
 void resetSettingsToDefault();
-void updateNexVal(const char *name, unsigned int val);
+void updateNexVal(const char *name, unsigned long val);
 void updateTime(const char *min_name, const char *sec_name, int time_sec);
 void displayTimeLeft();
 void displaySettings();
 void handleHoldButtons();
-int calcStepDelayMicrosec(int speed_percent);
-
-struct Settings
-{
-  int total_time;
-  int first_cycle_time;
-  int pause_time;
-  int rep_cycle_time;
-  int speed;
-  int angle_forward;
-  int angle_backward;
-};
-
-class Mixer
-{
-  public:
-  Mixer(const Settings &s, Motor *m)
-    : state_(PrepFirstCycle)
-    , next_state_(DoNothing)
-    , running_(false)
-  {
-    motor_ptr_ = m;
-
-    time_left_us_ = (unsigned long) s.total_time * 1000UL;
-    n_repetitions_ = (s.total_time - s.first_cycle_time)
-                    / (s.pause_time - s.rep_cycle_time);
-    delay_between_steps_us_ = calcStepDelayMicrosec(s.speed);
-
-    target_fw_pos_ = (int)((float)s.angle_forward * (TB6600_STEPS_PER_REV / 360.0));
-    target_bw_pos_ = -(int)((float)s.angle_backward * (TB6600_STEPS_PER_REV / 360.0));
-
-    settings_ = s;
-  }
-
-  void runLoop() {
-
-    if (!running_) {
-      return;
-    }
-
-    switch(state_) {
-      case PrepFirstCycle:
-        current_cycle_left_us_ = (unsigned long)settings_.first_cycle_time * 1000UL;
-        prev_millis_ = millis();
-        motor_ptr_->setDir(FORWARD);
-        next_state_ = PrepPause;
-        state_ = MotorRun;
-        break;
-      case PrepPause:
-        current_cycle_left_us_ = (unsigned long)settings_.pause_time * 1000UL;
-        next_state_ = PrepRepetition;
-        if (motor_ptr_->pos() == 0) {
-          state_ = DoNothing;
-        } else {
-          if (motor_ptr_->pos() < 0) {
-            motor_ptr_->setDir(FORWARD);
-          } else {
-            motor_ptr_->setDir(BACKWARD);
-          }
-          state_ = MotorReset;
-        }
-        break;
-      case PrepRepetition:
-        if (n_repetitions_ == 1) {
-          current_cycle_left_us_ = time_left_us_;
-          next_state_ = DoNothing;
-        } else {
-          current_cycle_left_us_ = (unsigned long)settings_.rep_cycle_time * 1000UL;
-          next_state_ = PrepPause;
-        }
-        n_repetitions_--;
-        motor_ptr_->setDir(FORWARD);
-        state_ = MotorRun;
-        break;
-      case MotorRun:
-        // TODO: After 71 mins there'll be micros() overflow
-        if ((micros() - prev_step_time_us_) > delay_between_steps_us_) {
-          prev_step_time_us_ = micros();
-          motor_ptr_->doStep();
-          if ((motor_ptr_->pos() == target_fw_pos_) || (motor_ptr_->pos() == target_bw_pos_)) {
-            motor_ptr_->changeDir();
-          }
-        }
-        break;
-      case MotorReset:
-        // TODO: After 71 mins there'll be micros() overflow
-        if ((micros() - prev_step_time_us_) > delay_between_steps_us_) {
-          prev_step_time_us_ = micros();
-          motor_ptr_->doStep();
-          if (motor_ptr_->pos() == 0) {
-            state_ = DoNothing;
-          }
-        }
-        break;
-      case DoNothing:
-        break;
-      default:
-        break;
-    }
-
-    updateTime();
-    if (current_cycle_left_us_ == 0) {
-      state_ = next_state_;
-    }
-    if (time_left_us_ == 0) {
-      running_ = false;
-    }
-  }
-
-  void Stop() {
-    running_ = false;
-    time_left_us_ = 0;
-    current_cycle_left_us_ = 0;
-  }
-
-  void Start() {
-    running_ = true;
-  }
-
-  bool isRunning() const {
-    return running_;
-  }
-
-  int timeLeft() {
-    return (int)(time_left_us_ / 1000);
-  }
-
-  int timeLeftCycle() {
-    return (int)(current_cycle_left_us_ / 1000);
-  }
-
-  private:
-    void updateTime() {
-      unsigned long dt = millis() - prev_millis_;
-      if (dt) {
-        prev_millis_ += dt;
-        current_cycle_left_us_ = (current_cycle_left_us_ > dt) ? current_cycle_left_us_ - dt : 0;
-        time_left_us_ = (time_left_us_ > dt) ? time_left_us_ - dt : 0;
-      }
-    }
-
-  private:
-    enum State {
-      PrepFirstCycle,
-      PrepPause,
-      PrepRepetition,
-      MotorRun,
-      MotorReset,
-      DoNothing
-    };
-
-    Motor *motor_ptr_;
-
-    State state_;
-    State next_state_;
-    Settings settings_;
-    unsigned long time_left_us_;
-    unsigned long current_cycle_left_us_;
-    unsigned long prev_step_time_us_;
-    unsigned long prev_millis_;
-    int n_repetitions_;
-    unsigned long delay_between_steps_us_;
-    int target_fw_pos_;
-    int target_bw_pos_;
-    bool running_;
-};
 
 /* private variable */
 Motor motor_(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US, TB6600_STEPS_PER_REV);
@@ -400,9 +204,13 @@ void loop()
 
     if (stop_shaking_ || !mixer.isRunning()) {
       stop_shaking_ = false;
-      mixer.Stop();
+      mixer.stop();
       displayTimeLeft();
-      motor_.reset(calcStepDelayMicrosec(settings_.speed));
+      int delay = calcStepDelayMicrosec(MIN_ROT_PER_MINUTE,
+                                        MAX_ROT_PER_MINUTE,
+                                        settings_.speed,
+                                        motor_.stepsPerRevolution());
+      motor_.reset(delay);
       motor_.enable(false);
     }
   }
@@ -417,7 +225,10 @@ void loop()
     if (!mixer.isRunning()) {
       handleHoldButtons();
       // Turn left if the button is held
-      int delay_motion = calcStepDelayMicrosec(20);
+      int delay_motion = calcStepDelayMicrosec(MIN_ROT_PER_MINUTE,
+                                               MAX_ROT_PER_MINUTE,
+                                               20,
+                                               motor_.stepsPerRevolution());
       if (A_Left) {
         motor_.enable(true);
         digitalWrite(dirPin, LOW);
@@ -466,7 +277,7 @@ void loop()
     start_shaking_ = false;
     motor_.enable(true);
     mixer = Mixer(settings_, &motor_);
-    mixer.Start();
+    mixer.start();
   }
 
   if (reset_button.released()) {
@@ -479,11 +290,14 @@ void loop()
 void resetAll()
 {
   if (mixer.isRunning()) {
-    mixer.Stop();
+    mixer.stop();
   }
   resetSettingsToDefault();
   motor_.enable(true);
-  motor_.reset(calcStepDelayMicrosec(settings_.speed));
+  motor_.reset(calcStepDelayMicrosec(MIN_ROT_PER_MINUTE,
+                                     MAX_ROT_PER_MINUTE,
+                                     settings_.speed,
+                                     motor_.stepsPerRevolution()));
   motor_.enable(false);
 }
 
@@ -778,7 +592,7 @@ void DW7PopCallback(void *ptr)
   dw7=false;
 }
 
-void updateNexVal(const char *name, unsigned int val)
+void updateNexVal(const char *name, unsigned long val)
 {
   Serial.print(name);
   Serial.print(val);
@@ -861,25 +675,4 @@ void handleHoldButtons()
   if (dw7) {
     settings_.speed = max(settings_.speed - increment - i, 0);
   }
-}
-
-int calcStepDelayMicrosec(int speed_percent)
-{
-  long rot_per_min = MIN_ROT_PER_MINUTE;
-  rot_per_min = (speed_percent - 1);
-  rot_per_min *= (MAX_ROT_PER_MINUTE - MIN_ROT_PER_MINUTE);
-  rot_per_min = round((rot_per_min) / (100.0 - 1.0));
-  rot_per_min += MIN_ROT_PER_MINUTE;
-
-  if (rot_per_min < MIN_ROT_PER_MINUTE) {
-    rot_per_min = MIN_ROT_PER_MINUTE;
-  } else if (rot_per_min > MAX_ROT_PER_MINUTE) {
-    rot_per_min = MAX_ROT_PER_MINUTE;
-  }
-
-  // To calc delay in ms between every step according to speed:
-  // (60 * 1000 msec/min) / ((rotation/min) * (steps/rotation)) = ms between each step
-  unsigned long tmp = 60*1000LU*1000LU;
-  tmp /= (rot_per_min * TB6600_STEPS_PER_REV);
-  return (int)tmp;
 }

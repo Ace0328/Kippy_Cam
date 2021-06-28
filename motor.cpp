@@ -78,3 +78,8 @@ void Motor::changeDir()
     setDir(FORWARD);
   }
 }
+
+int Motor::stepsPerRevolution() const
+{
+  return step_per_rev_;
+}

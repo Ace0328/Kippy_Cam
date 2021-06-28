@@ -20,6 +20,7 @@ public:
   void setDir(Dir dir);
   void reset(int delay_us);
   void changeDir();
+  int stepsPerRevolution() const;
 
   private:
     const int en_pin_;
