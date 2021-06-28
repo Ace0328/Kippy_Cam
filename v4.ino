@@ -12,51 +12,6 @@ const int time_click=100; //wait 5ms
 const int max_speed=3;  //delay(1ms faster speed)
 const int min_speed=15; //delay(500ms slower speed)
 
-/* Function prototypes */
-void StartPushCallback(void *ptr);
-void StopPushCallback(void *ptr);
-void ResetPushCallback(void *ptr);
-void LeftPushCallback(void *ptr);
-void LeftPopCallback(void *ptr);
-void RightPushCallback(void *ptr);
-void RightPopCallback(void *ptr);
-void UP1PushCallback(void *ptr);
-void UP1PopCallback(void *ptr);
-void DW1PushCallback(void *ptr);
-void DW1PopCallback(void *ptr);
-void UP2PushCallback(void *ptr);
-void UP2PopCallback(void *ptr);
-void DW2PushCallback(void *ptr);
-void DW2PopCallback(void *ptr);
-void UP3PushCallback(void *ptr);
-void UP3PopCallback(void *ptr);
-void DW3PushCallback(void *ptr);
-void DW3PopCallback(void *ptr);
-void UP4PushCallback(void *ptr);
-void UP4PopCallback(void *ptr);
-void DW4PushCallback(void *ptr);
-void DW4PopCallback(void *ptr);
-void UP5PushCallback(void *ptr);
-void UP5PopCallback(void *ptr);
-void DW5PushCallback(void *ptr);
-void DW5PopCallback(void *ptr);
-void UP6PushCallback(void *ptr);
-void UP6PopCallback(void *ptr);
-void DW6PushCallback(void *ptr);
-void DW6PopCallback(void *ptr);
-void UP7PushCallback(void *ptr);
-void UP7PopCallback(void *ptr);
-void DW7PushCallback(void *ptr);
-void DW7PopCallback(void *ptr);
-
-void resetAll();
-void resetSettingsToDefault();
-void updateNexVal(const char *name, unsigned long val);
-void updateTime(const char *min_name, const char *sec_name, int time_sec);
-void displayTimeLeft();
-void displaySettings();
-void handleHoldButtons();
-
 /* private variable */
 Motor motor_(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US, TB6600_STEPS_PER_REV);
 Mixer mixer = Mixer(Settings(), &motor_);
@@ -137,8 +92,52 @@ NexTouch *nex_listen_list[] =
   NULL  // String terminated
 };  // End of touch event list
 
+/* Function prototypes */
+void StartPushCallback(void *ptr);
+void StopPushCallback(void *ptr);
+void ResetPushCallback(void *ptr);
+void LeftPushCallback(void *ptr);
+void LeftPopCallback(void *ptr);
+void RightPushCallback(void *ptr);
+void RightPopCallback(void *ptr);
+void UP1PushCallback(void *ptr);
+void UP1PopCallback(void *ptr);
+void DW1PushCallback(void *ptr);
+void DW1PopCallback(void *ptr);
+void UP2PushCallback(void *ptr);
+void UP2PopCallback(void *ptr);
+void DW2PushCallback(void *ptr);
+void DW2PopCallback(void *ptr);
+void UP3PushCallback(void *ptr);
+void UP3PopCallback(void *ptr);
+void DW3PushCallback(void *ptr);
+void DW3PopCallback(void *ptr);
+void UP4PushCallback(void *ptr);
+void UP4PopCallback(void *ptr);
+void DW4PushCallback(void *ptr);
+void DW4PopCallback(void *ptr);
+void UP5PushCallback(void *ptr);
+void UP5PopCallback(void *ptr);
+void DW5PushCallback(void *ptr);
+void DW5PopCallback(void *ptr);
+void UP6PushCallback(void *ptr);
+void UP6PopCallback(void *ptr);
+void DW6PushCallback(void *ptr);
+void DW6PopCallback(void *ptr);
+void UP7PushCallback(void *ptr);
+void UP7PopCallback(void *ptr);
+void DW7PushCallback(void *ptr);
+void DW7PopCallback(void *ptr);
 
-/*====================================================================*/
+void resetAll();
+void resetSettingsToDefault();
+void updateNexVal(const char *name, unsigned long val);
+void updateTime(const char *min_name, const char *sec_name, int time_sec);
+void displayTimeLeft();
+void displaySettings();
+void handleHoldButtons();
+
+/***************************************************************/
 void setup() {
 
   if (!nexInit()) {
