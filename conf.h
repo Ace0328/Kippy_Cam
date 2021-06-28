@@ -30,7 +30,8 @@
 /* Tone */
 #define TONE_FREQ_HZ	1000
 #define TONE_START_TIME_S 20 // seconds before the end
-#define TONE_END_TIME_S   19 // seconds before the end. It should be always less than start time
+#define TONE_END_TIME_S   15 // seconds before the end. It should be always less than start time
+#define TONE_INTERVAL_MS 1000
 
 
 #endif // CONF_H

@@ -5,6 +5,7 @@
 #include "conf.h"
 #include "motor.h"
 #include "mixer.h"
+#include "buzzer.h"
 
 /* Variable constants  */
 const int increment=1;
@@ -17,6 +18,7 @@ Motor motor_(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US, TB6600_STEPS
 Mixer mixer = Mixer(Settings(), &motor_);
 Settings settings_;
 Button reset_button(PIN_BUTTON_RESET);
+Buzzer buzzer(PIN_BUZZER, TONE_FREQ_HZ, TONE_INTERVAL_MS);
 int i=0;
 
 /* Counters to call function with some periodic interval */
@@ -67,6 +69,7 @@ bool start_shaking_ = false;
 bool stop_shaking_ = false;
 bool A_Left = false;
 bool A_Right = false;
+bool beeping_ = false;
 
 /* List of touchable elements */
 NexTouch *nex_listen_list[] =
@@ -205,18 +208,18 @@ void loop()
     mixer.runLoop();
 
     // Make a sound
-    if (!buzzer_on_) {
-      if (mixer.timeLeft() <= TONE_START_TIME_S) {
-        tone(PIN_BUZZER, TONE_FREQ_HZ);
-        buzzer_on_ = true;
+    if (!buzzer.isOn()) {
+      if (mixer.timeLeft() == TONE_START_TIME_S) {
+        buzzer.start();
       }
     } else {
-      if (mixer.timeLeft() <= TONE_END_TIME_S) {
-        noTone(PIN_BUZZER);
+      buzzer.loop();
+      if (mixer.timeLeft() == TONE_END_TIME_S) {
+        buzzer.stop();
       }
     }
 
-
+    // Stop by natural ending or by "Stop" button
     if (stop_shaking_ || !mixer.isRunning()) {
       stop_shaking_ = false;
       mixer.stop();
@@ -285,6 +288,7 @@ void loop()
   if (start_shaking_) {
     // TODO: Verify all time settings before running
     start_shaking_ = false;
+    beeping_ = false;
     mixer = Mixer(settings_, &motor_);
     mixer.start();
     buzzer_on_ = false;
