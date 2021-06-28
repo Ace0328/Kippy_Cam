@@ -2,6 +2,8 @@
 #include <Button.h>
 #include <Nextion.h>
 
+#include "motor.h"
+
 /* Used Pins */
 
 #define PIN_TB6600_EN     8
@@ -9,11 +11,6 @@
 #define stepPin           13
 #define PIN_BUTTON_RESET  10
 #define PIN_BUZZER        9
-
-enum Dir {
-  FORWARD = HIGH,
-  BACKWARD = LOW
-};
 
 /* Macro-defined constants */
 
@@ -91,90 +88,6 @@ void displaySettings();
 void handleHoldButtons();
 int calcStepDelayMicrosec(int speed_percent);
 
-class MotorNew
-{
-public:
-  MotorNew(int en_pin, int step_pin, int dir_pin, int pulse_w)
-    : en_pin_(en_pin)
-    , step_pin_(step_pin)
-    , dir_pin_(dir_pin)
-    , pulse_w_(pulse_w)
-    , pos_(0)
-  {
-    pinMode(en_pin_, OUTPUT);
-    pinMode(step_pin_, OUTPUT);
-    pinMode(dir_pin_, OUTPUT);
-
-    setDir(FORWARD);
-    enable(false);
-  }
-
-  void doStep() {
-    digitalWrite(step_pin_, HIGH);
-    delayMicroseconds(pulse_w_);
-    digitalWrite(step_pin_, LOW);
-
-    if (dir_ == FORWARD) {
-      pos_++;
-    } else {
-      pos_--;
-    }
-  }
-
-  int pos() const {
-    return pos_;
-  }
-
-  Dir dir() const {
-    return dir_;
-  }
-
-  void enable(bool en) {
-    if (en) {
-      digitalWrite(en_pin_, HIGH);
-    } else {
-      digitalWrite(en_pin_, LOW);
-    }
-    delayMicroseconds(50); // TODO: The magic. Just delay before TB6600 detect the raise
-  }
-
-  void setDir(Dir dir) {
-    dir_ = dir;
-    digitalWrite(dir_pin_, dir_);
-  }
-
-  void reset(int delay_us) {
-    if (pos_ > 0) {
-      setDir(BACKWARD);
-    } else {
-      setDir(FORWARD);
-    }
-    pos_ %= TB6600_STEPS_PER_REV;
-    while (pos_ != 0) {
-      doStep();
-      delayMicroseconds(delay_us);
-    }
-    setDir(FORWARD);
-  }
-
-  void changeDir() {
-    if (dir_ == FORWARD) {
-      setDir(BACKWARD);
-    } else {
-      setDir(FORWARD);
-    }
-  }
-
-  private:
-    const int en_pin_;
-    const int step_pin_;
-    const int dir_pin_;
-    const int pulse_w_;
-
-    int pos_;
-    Dir dir_;
-};
-
 struct Settings
 {
   int total_time;
@@ -189,7 +102,7 @@ struct Settings
 class Mixer
 {
   public:
-  Mixer(const Settings &s, MotorNew *m)
+  Mixer(const Settings &s, Motor *m)
     : state_(PrepFirstCycle)
     , next_state_(DoNothing)
     , running_(false)
@@ -324,7 +237,7 @@ class Mixer
       DoNothing
     };
 
-    MotorNew *motor_ptr_;
+    Motor *motor_ptr_;
 
     State state_;
     State next_state_;
@@ -341,8 +254,8 @@ class Mixer
 };
 
 /* private variable */
-MotorNew motor_new = MotorNew(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US);
-Mixer mixer = Mixer(Settings(), &motor_new);
+Motor motor_(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US, TB6600_STEPS_PER_REV);
+Mixer mixer = Mixer(Settings(), &motor_);
 Settings settings_;
 Button reset_button(PIN_BUTTON_RESET);
 int i=0;
@@ -477,7 +390,7 @@ void setup() {
   start_shaking_ = false;
   stop_shaking_ = false;
 
-  mixer = Mixer(settings_, &motor_new);
+  mixer = Mixer(settings_, &motor_);
 }
 
 void loop()
@@ -489,8 +402,8 @@ void loop()
       stop_shaking_ = false;
       mixer.Stop();
       displayTimeLeft();
-      motor_new.reset(calcStepDelayMicrosec(settings_.speed));
-      motor_new.enable(false);
+      motor_.reset(calcStepDelayMicrosec(settings_.speed));
+      motor_.enable(false);
     }
   }
 
@@ -506,7 +419,7 @@ void loop()
       // Turn left if the button is held
       int delay_motion = calcStepDelayMicrosec(20);
       if (A_Left) {
-        motor_new.enable(true);
+        motor_.enable(true);
         digitalWrite(dirPin, LOW);
       }
       while (A_Left) {
@@ -521,7 +434,7 @@ void loop()
 
       // Turn right if the button is held
       if (A_Right) {
-        motor_new.enable(true);
+        motor_.enable(true);
         digitalWrite(dirPin, HIGH);
       }
       while (A_Right) {
@@ -534,7 +447,7 @@ void loop()
         nexLoop(nex_listen_list); // Check for any touch event
       }
 
-      motor_new.enable(false);
+      motor_.enable(false);
     }
   }
 
@@ -551,8 +464,8 @@ void loop()
   if (start_shaking_) {
     // TODO: Verify all time settings before running
     start_shaking_ = false;
-    motor_new.enable(true);
-    mixer = Mixer(settings_, &motor_new);
+    motor_.enable(true);
+    mixer = Mixer(settings_, &motor_);
     mixer.Start();
   }
 
@@ -569,9 +482,9 @@ void resetAll()
     mixer.Stop();
   }
   resetSettingsToDefault();
-  motor_new.enable(true);
-  motor_new.reset(calcStepDelayMicrosec(settings_.speed));
-  motor_new.enable(false);
+  motor_.enable(true);
+  motor_.reset(calcStepDelayMicrosec(settings_.speed));
+  motor_.enable(false);
 }
 
 void resetSettingsToDefault()
