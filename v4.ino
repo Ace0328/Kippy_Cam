@@ -3,8 +3,11 @@
 
 /* Used Pins */
 
-#define dirPin  12
-#define stepPin 13
+#define PIN_TB6600_EN     8
+#define dirPin            12
+#define stepPin           13
+#define PIN_BUTTON_RESET  10
+#define PIN_BUZZER        9
 
 enum Dir {
   FORWARD = HIGH,
@@ -89,16 +92,19 @@ int calcStepDelayMicrosec(int speed_percent);
 class MotorNew
 {
 public:
-  MotorNew(int step_pin, int dir_pin, int pulse_w)
-    : step_pin_(step_pin)
+  MotorNew(int en_pin, int step_pin, int dir_pin, int pulse_w)
+    : en_pin_(en_pin)
+    , step_pin_(step_pin)
     , dir_pin_(dir_pin)
     , pulse_w_(pulse_w)
     , pos_(0)
   {
+    pinMode(en_pin_, OUTPUT);
     pinMode(step_pin_, OUTPUT);
-    pinMode(step_pin_, OUTPUT);
+    pinMode(dir_pin_, OUTPUT);
 
     setDir(FORWARD);
+    enable(false);
   }
 
   void doStep() {
@@ -119,6 +125,15 @@ public:
 
   Dir dir() const {
     return dir_;
+  }
+
+  void enable(bool en) {
+    if (en) {
+      digitalWrite(en_pin_, HIGH);
+    } else {
+      digitalWrite(en_pin_, LOW);
+    }
+    delayMicroseconds(50); // TODO: The magic. Just delay before TB6600 detect the raise
   }
 
   void setDir(Dir dir) {
@@ -149,6 +164,7 @@ public:
   }
 
   private:
+    const int en_pin_;
     const int step_pin_;
     const int dir_pin_;
     const int pulse_w_;
@@ -323,7 +339,7 @@ class Mixer
 };
 
 /* private variable */
-MotorNew motor_new = MotorNew(stepPin, dirPin, TB6600_PULSE_WIDTH_US);
+MotorNew motor_new = MotorNew(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US);
 Mixer mixer = Mixer(Settings(), &motor_new);
 Settings settings_;
 int i=0;
@@ -472,11 +488,12 @@ void loop()
   if (mixer.isRunning()) {
     mixer.runLoop();
 
-    if (stop_shaking_) {
+    if (stop_shaking_ || !mixer.isRunning()) {
       stop_shaking_ = false;
       mixer.Stop();
       displayTimeLeft();
       motor_new.reset(calcStepDelayMicrosec(settings_.speed));
+      motor_new.enable(false);
     }
   }
 
@@ -492,6 +509,7 @@ void loop()
       // Turn left if the button is held
       int delay_motion = calcStepDelayMicrosec(20);
       if (A_Left) {
+        motor_new.enable(true);
         digitalWrite(dirPin, LOW);
       }
       while (A_Left) {
@@ -506,6 +524,7 @@ void loop()
 
       // Turn right if the button is held
       if (A_Right) {
+        motor_new.enable(true);
         digitalWrite(dirPin, HIGH);
       }
       while (A_Right) {
@@ -517,6 +536,8 @@ void loop()
         delayMicroseconds(delay_motion);
         nexLoop(nex_listen_list); // Check for any touch event
       }
+
+      motor_new.enable(false);
     }
   }
 
