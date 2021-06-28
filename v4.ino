@@ -226,7 +226,6 @@ void loop()
                                         settings_.speed,
                                         motor_.stepsPerRevolution());
       motor_.reset(delay);
-      motor_.enable(false);
     }
   }
 
@@ -245,7 +244,6 @@ void loop()
                                                20,
                                                motor_.stepsPerRevolution());
       if (A_Left) {
-        motor_.enable(true);
         digitalWrite(dirPin, LOW);
       }
       while (A_Left) {
@@ -260,7 +258,6 @@ void loop()
 
       // Turn right if the button is held
       if (A_Right) {
-        motor_.enable(true);
         digitalWrite(dirPin, HIGH);
       }
       while (A_Right) {
@@ -272,8 +269,6 @@ void loop()
         delayMicroseconds(delay_motion);
         nexLoop(nex_listen_list); // Check for any touch event
       }
-
-      motor_.enable(false);
     }
   }
 
@@ -290,7 +285,6 @@ void loop()
   if (start_shaking_) {
     // TODO: Verify all time settings before running
     start_shaking_ = false;
-    motor_.enable(true);
     mixer = Mixer(settings_, &motor_);
     mixer.start();
     buzzer_on_ = false;
@@ -309,12 +303,10 @@ void resetAll()
     mixer.stop();
   }
   resetSettingsToDefault();
-  motor_.enable(true);
   motor_.reset(calcStepDelayMicrosec(MIN_ROT_PER_MINUTE,
                                      MAX_ROT_PER_MINUTE,
                                      settings_.speed,
                                      motor_.stepsPerRevolution()));
-  motor_.enable(false);
 }
 
 void resetSettingsToDefault()

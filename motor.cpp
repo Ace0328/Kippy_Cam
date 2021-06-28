@@ -8,12 +8,11 @@ Motor::Motor(int en_pin, int step_pin, int dir_pin, int pulse_w, int step_per_re
   , step_per_rev_(step_per_rev_)
   , pos_(0)
 {
-  pinMode(en_pin_, OUTPUT);
+  // pinMode(en_pin_, OUTPUT);
   pinMode(step_pin_, OUTPUT);
   pinMode(dir_pin_, OUTPUT);
 
   setDir(FORWARD);
-  enable(false);
 }
 
 void Motor::doStep()
@@ -41,12 +40,13 @@ Dir Motor::dir() const
 
 void Motor::enable(bool en)
 {
-  if (en) {
-    digitalWrite(en_pin_, HIGH);
-  } else {
-    digitalWrite(en_pin_, LOW);
-  }
-  delayMicroseconds(50); // TODO: The magic. Just delay before TB6600 detect the raise
+  (void)en;
+  // if (en) {
+  //   digitalWrite(en_pin_, LOW);
+  // } else {
+  //   digitalWrite(en_pin_, HIGH);
+  // }
+  // delayMicroseconds(50); // TODO: The magic. Just delay before TB6600 detect the raise
 }
 
 void Motor::setDir(Dir dir)
