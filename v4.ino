@@ -1,4 +1,5 @@
 #include <math.h>
+#include <Button.h>
 #include <Nextion.h>
 
 /* Used Pins */
@@ -81,6 +82,7 @@ void UP7PopCallback(void *ptr);
 void DW7PushCallback(void *ptr);
 void DW7PopCallback(void *ptr);
 
+void resetAll();
 void resetSettingsToDefault();
 void updateNexVal(const char *name, unsigned int val);
 void updateTime(const char *min_name, const char *sec_name, int time_sec);
@@ -342,6 +344,7 @@ class Mixer
 MotorNew motor_new = MotorNew(PIN_TB6600_EN, stepPin, dirPin, TB6600_PULSE_WIDTH_US);
 Mixer mixer = Mixer(Settings(), &motor_new);
 Settings settings_;
+Button reset_button(PIN_BUTTON_RESET);
 int i=0;
 
 /* Counters to call function with some periodic interval */
@@ -471,9 +474,7 @@ void setup() {
   DW6.attachPop(DW6PopCallback, &DW6);   // Button press
   DW7.attachPop(DW7PopCallback, &DW7);   // Button press
 
-  // Declare pins as output:
-  pinMode(stepPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
+  reset_button.begin();
 
   resetSettingsToDefault();
 
@@ -554,9 +555,27 @@ void loop()
   if (start_shaking_) {
     // TODO: Verify all time settings before running
     start_shaking_ = false;
+    motor_new.enable(true);
     mixer = Mixer(settings_, &motor_new);
     mixer.Start();
   }
+
+  if (reset_button.released()) {
+    resetAll();
+    displaySettings();
+    displayTimeLeft();
+  }
+}
+
+void resetAll()
+{
+  if (mixer.isRunning()) {
+    mixer.Stop();
+  }
+  resetSettingsToDefault();
+  motor_new.enable(true);
+  motor_new.reset(calcStepDelayMicrosec(settings_.speed));
+  motor_new.enable(false);
 }
 
 void resetSettingsToDefault()
@@ -588,12 +607,7 @@ void StopPushCallback(void *ptr)
 //---------Reset button-------------------------------------------------
 void ResetPushCallback(void *ptr)
 {
-  if (mixer.isRunning()) {
-    return;
-}
-  resetSettingsToDefault();
-  motor_new.reset(calcStepDelayMicrosec(settings_.speed));
-
+  resetAll();
   displaySettings();
   displayTimeLeft();
 }
