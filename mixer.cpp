@@ -9,7 +9,7 @@ Mixer::Mixer(const Settings &s, Motor *m)
 {
   motor_ptr_ = m;
 
-  time_left_us_ = (unsigned long) s.total_time * 1000UL;
+  time_left_ms_ = (unsigned long) s.total_time * 1000UL;
   n_repetitions_ = (s.total_time - s.first_cycle_time)
                   / (s.pause_time - s.rep_cycle_time);
   delay_between_steps_us_ = calcStepDelayMicrosec(MIN_ROT_PER_MINUTE,
@@ -31,14 +31,14 @@ void Mixer::runLoop()
 
   switch(state_) {
     case PrepFirstCycle:
-      current_cycle_left_us_ = (unsigned long)settings_.first_cycle_time * 1000UL;
+      current_cycle_left_ms_ = (unsigned long)settings_.first_cycle_time * 1000UL;
       prev_millis_ = millis();
       motor_ptr_->setDir(FORWARD);
       next_state_ = PrepPause;
       state_ = MotorRun;
       break;
     case PrepPause:
-      current_cycle_left_us_ = (unsigned long)settings_.pause_time * 1000UL;
+      current_cycle_left_ms_ = (unsigned long)settings_.pause_time * 1000UL;
       next_state_ = PrepRepetition;
       if (motor_ptr_->pos() == 0) {
         state_ = DoNothing;
@@ -53,10 +53,10 @@ void Mixer::runLoop()
       break;
     case PrepRepetition:
       if (n_repetitions_ == 1) {
-        current_cycle_left_us_ = time_left_us_;
+        current_cycle_left_ms_ = time_left_ms_;
         next_state_ = DoNothing;
       } else {
-        current_cycle_left_us_ = (unsigned long)settings_.rep_cycle_time * 1000UL;
+        current_cycle_left_ms_ = (unsigned long)settings_.rep_cycle_time * 1000UL;
         next_state_ = PrepPause;
       }
       n_repetitions_--;
@@ -90,10 +90,10 @@ void Mixer::runLoop()
   }
 
   updateTime();
-  if (current_cycle_left_us_ == 0) {
+  if (current_cycle_left_ms_ == 0) {
     state_ = next_state_;
   }
-  if (time_left_us_ == 0) {
+  if (time_left_ms_ == 0) {
     running_ = false;
   }
 }
@@ -101,8 +101,8 @@ void Mixer::runLoop()
 void Mixer::stop()
 {
   running_ = false;
-  time_left_us_ = 0;
-  current_cycle_left_us_ = 0;
+  time_left_ms_ = 0;
+  current_cycle_left_ms_ = 0;
 }
 
 void Mixer::start()
@@ -117,12 +117,12 @@ bool Mixer::isRunning() const
 
 int Mixer::timeLeft() const
 {
-  return (int)(time_left_us_ / 1000);
+  return (int)(time_left_ms_ / 1000);
 }
 
 int Mixer::timeLeftCycle() const
 {
-  return (int)(current_cycle_left_us_ / 1000);
+  return (int)(current_cycle_left_ms_ / 1000);
 }
 
 void Mixer::updateTime()
@@ -130,8 +130,8 @@ void Mixer::updateTime()
   unsigned long dt = millis() - prev_millis_;
   if (dt) {
     prev_millis_ += dt;
-    current_cycle_left_us_ = (current_cycle_left_us_ > dt) ? current_cycle_left_us_ - dt : 0;
-    time_left_us_ = (time_left_us_ > dt) ? time_left_us_ - dt : 0;
+    current_cycle_left_ms_ = (current_cycle_left_ms_ > dt) ? current_cycle_left_ms_ - dt : 0;
+    time_left_ms_ = (time_left_ms_ > dt) ? time_left_ms_ - dt : 0;
   }
 }
 

@@ -48,8 +48,8 @@ private:
     State state_;
     State next_state_;
     Settings settings_;
-    unsigned long time_left_us_;
-    unsigned long current_cycle_left_us_;
+    unsigned long time_left_ms_;
+    unsigned long current_cycle_left_ms_;
     unsigned long prev_step_time_us_;
     unsigned long prev_millis_;
     int n_repetitions_;
