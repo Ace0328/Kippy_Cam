@@ -294,10 +294,15 @@ void loop()
     buzzer_on_ = false;
   }
 
-  if (reset_button.released()) {
+  if (reset_button.pressed()) {
     resetAll();
     displaySettings();
     displayTimeLeft();
+    motor_.enable(false);
+  }
+
+  if (reset_button.released()) {
+    motor_.enable(true);
   }
 }
 
