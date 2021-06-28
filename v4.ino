@@ -331,6 +331,8 @@ void resetSettingsToDefault()
 //---------Start button-------------------------------------------------
 void StartPushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -340,12 +342,16 @@ void StartPushCallback(void *ptr)
 //---------Stop button-------------------------------------------------
 void StopPushCallback(void *ptr)
 {
+  (void)ptr;
+
   stop_shaking_ = true;
 }
 
 //---------Reset button-------------------------------------------------
 void ResetPushCallback(void *ptr)
 {
+  (void)ptr;
+
   resetAll();
   displaySettings();
   displayTimeLeft();
@@ -354,30 +360,40 @@ void ResetPushCallback(void *ptr)
 //---------Left button-------------------------------------------------
 void LeftPushCallback(void *ptr)
 {
+  (void)ptr;
+
   A_Left = true;
   A_Right = false;
 }
 
 void LeftPopCallback(void *ptr)
 {
+  (void)ptr;
+
   A_Left = false;
 }
 
 //---------Right button-------------------------------------------------
 void RightPushCallback(void *ptr)
 {
+  (void)ptr;
+
   A_Right = true;
   A_Left = false;
 }
 
 void RightPopCallback(void *ptr)
 {
+  (void)ptr;
+
   A_Right = false;
 }
 
 //---------Total time-------------------------------------------------
 void UP1PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -389,11 +405,15 @@ void UP1PushCallback(void *ptr)
 
 void UP1PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up1=false;
 }
 
 void DW1PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -405,12 +425,16 @@ void DW1PushCallback(void *ptr)
 
 void DW1PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw1=false;
 }
 
 //---------First cycle-------------------------------------------------
 void UP2PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -423,11 +447,15 @@ void UP2PushCallback(void *ptr)
 
 void UP2PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up2=false;
 }
 
 void DW2PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -439,12 +467,16 @@ void DW2PushCallback(void *ptr)
 
 void DW2PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw2=false;
 }
 
 //---------Pause time-------------------------------------------------
 void UP3PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -457,11 +489,15 @@ void UP3PushCallback(void *ptr)
 
 void UP3PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up3=false;
 }
 
 void DW3PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -473,12 +509,16 @@ void DW3PushCallback(void *ptr)
 
 void DW3PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw3=false;
 }
 
 //---------Repetition cycle-------------------------------------------------
 void UP4PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -491,11 +531,15 @@ void UP4PushCallback(void *ptr)
 
 void UP4PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up4=false;
 }
 
 void DW4PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -506,12 +550,16 @@ void DW4PushCallback(void *ptr)
 }
 void DW4PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw4=false;
 }
 
 //---------Angle FORWARD-------------------------------------------------
 void UP5PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -523,11 +571,15 @@ void UP5PushCallback(void *ptr)
 
 void UP5PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up5=false;
 }
 
 void DW5PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -539,12 +591,16 @@ void DW5PushCallback(void *ptr)
 
 void DW5PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw5=false;
 }
 
 //---------Angle REVERS-------------------------------------------------
 void UP6PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -556,11 +612,15 @@ void UP6PushCallback(void *ptr)
 
 void UP6PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up6=false;
 }
 
 void DW6PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -572,12 +632,16 @@ void DW6PushCallback(void *ptr)
 
 void DW6PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw6=false;
 }
 
 //---------Speed-------------------------------------------------
 void UP7PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -589,11 +653,15 @@ void UP7PushCallback(void *ptr)
 
 void UP7PopCallback(void *ptr)
 {
+  (void)ptr;
+
   up7=false;
 }
 
 void DW7PushCallback(void *ptr)
 {
+  (void)ptr;
+
   if (mixer.isRunning()) {
     return;
   }
@@ -605,6 +673,8 @@ void DW7PushCallback(void *ptr)
 
 void DW7PopCallback(void *ptr)
 {
+  (void)ptr;
+
   dw7=false;
 }
 
